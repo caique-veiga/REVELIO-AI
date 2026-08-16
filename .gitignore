@@ -28,3 +28,7 @@ htmlcov/
 # Dados capturados em runtime (imagens ficam fora do controle de versão)
 data/images/*
 !data/images/.gitkeep
+
+# Pesos de modelos (YOLO baixa automaticamente em tempo de execução)
+*.pt
+validation_yolo_tests/*

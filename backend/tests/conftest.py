@@ -1,13 +1,29 @@
+import io
 import uuid
 from collections.abc import Callable, Generator
 
 import pytest
+from PIL import Image
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.infrastructure.database.base import Base
 from app.infrastructure.database.models import DetectedObject, Scene, User
+
+
+@pytest.fixture
+def jpeg_bytes() -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (64, 48), color="red").save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+@pytest.fixture
+def png_bytes() -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (32, 32), color="blue").save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 @pytest.fixture

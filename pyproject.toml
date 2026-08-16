@@ -13,6 +13,11 @@ dependencies = [
     "alembic>=1.13",
     "psycopg[binary]>=3.2",
     "pillow>=11.0",
+    "numpy>=1.26",
+    "opencv-python>=4.9",
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "ultralytics>=8.3",
 ]
 
 [dependency-groups]
@@ -38,6 +43,7 @@ known-first-party = ["app"]
 
 [tool.mypy]
 python_version = "3.12"
+plugins = ["pydantic.mypy"]
 strict = true
 warn_unused_ignores = true
 ignore_missing_imports = true
@@ -48,3 +54,15 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["backend/app"]
+
+# YOLO inference runs on the CPU (the nano model is small enough for it); the
+# project's only GPU is the separate Ollama host, reached over HTTP/VPN. Pull
+# CPU-only torch wheels to avoid installing multi-gigabyte CUDA packages here.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
