@@ -183,5 +183,12 @@ ex. `front-center`), sem inferir distância, GPS ou profundidade; `Detection.pos
 (preenchido por um passo separado, não pelo próprio detector). Cor predominante: `ColorAnalyzer`
 (protocol) e `OpenCVColorAnalyzer` — recorta o bbox, classifica em HSV (12 cores) e retorna
 `ColorResult` (`name`, `rgb`, `confidence`); validado com imagens reais via
-`scripts/validate_color_analyzer.py`. Scene Builder, Ollama e o aplicativo Android ainda não foram
-implementados.
+`scripts/validate_color_analyzer.py`. Scene JSON: `SceneBuilder` (domain service) monta um `Scene`
+(`scene_id`, `conversation_id`, `image`, `model`, `objects`) a partir de detecções já enriquecidas
+com posição e cor — valida que cada `Detection` tem `position`/`color` antes de montar a cena, mas
+não chama `PositionAnalyzer`/`ColorAnalyzer` ele mesmo (isso é papel do futuro `SceneService`).
+`SceneSchema` (Pydantic, em `api/schemas/`) serializa exatamente o formato descrito na seção 11 do
+contexto, incluindo a chave `class` (reservada em Python — mapeada via `Field(alias="class")`).
+Pipeline completo (`ObjectDetector` mockado + `PositionAnalyzer`/`OpenCVColorAnalyzer` reais +
+`SceneBuilder` + `SceneSchema`) coberto por testes de integração. Ollama e o aplicativo Android
+ainda não foram implementados.

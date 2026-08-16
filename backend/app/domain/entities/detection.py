@@ -2,6 +2,7 @@ import uuid
 from dataclasses import dataclass, field
 
 from app.domain.entities.bounding_box import BoundingBox
+from app.domain.entities.color_result import ColorResult
 from app.domain.entities.position import Position
 
 
@@ -13,3 +14,4 @@ class Detection:
     bbox: BoundingBox
     object_id: uuid.UUID = field(default_factory=uuid.uuid4)
     position: Position | None = None
+    color: ColorResult | None = None
