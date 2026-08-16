@@ -40,8 +40,7 @@ privada/VPN — o endereço do Ollama é sempre configurável via `OLLAMA_BASE_U
 
 ## Stack
 
-- Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic
-- PostgreSQL (ainda não integrado nesta etapa)
+- Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, PostgreSQL
 - YOLO (COCO) + OpenCV para visão computacional (ainda não integrado nesta etapa)
 - Ollama + Qwen 3.5 4B para a VLM (ainda não integrado nesta etapa)
 - pytest, Ruff, mypy
@@ -56,6 +55,34 @@ Instale as dependências e crie o ambiente virtual:
 uv sync
 ```
 
+Copie `.env.example` para `.env` e ajuste os valores conforme seu ambiente:
+
+```bash
+cp .env.example .env
+```
+
+### Banco de dados
+
+Suba um PostgreSQL de desenvolvimento via Docker Compose:
+
+```bash
+docker compose -f docker/docker-compose.yml up -d
+```
+
+Aplique as migrations:
+
+```bash
+uv run alembic upgrade head
+```
+
+Para criar uma nova migration depois de alterar os models (`backend/app/infrastructure/database/models.py`):
+
+```bash
+uv run alembic revision --autogenerate -m "descrição da mudança"
+```
+
+### Servidor
+
 Suba o servidor de desenvolvimento:
 
 ```bash
@@ -69,12 +96,6 @@ curl http://localhost:8000/health
 # {"status": "ok"}
 ```
 
-Copie `.env.example` para `.env` e ajuste os valores conforme seu ambiente:
-
-```bash
-cp .env.example .env
-```
-
 ### Testes e qualidade
 
 ```bash
@@ -83,8 +104,13 @@ uv run ruff check .
 uv run mypy backend/app
 ```
 
+Os testes de repository rodam contra um SQLite em memória (não é necessário Postgres para
+`uv run pytest`); o Postgres real via Docker é usado apenas para rodar a aplicação e as migrations.
+
 ## Status atual
 
-Fundação do backend: estrutura modular, configuração tipada por environment variables e endpoint
-`GET /health`. YOLO, PostgreSQL, Ollama, armazenamento de imagens e o aplicativo Android ainda não
-foram implementados.
+Fundação do backend (estrutura modular, configuração tipada, `GET /health`) e persistência
+PostgreSQL: models SQLAlchemy 2.x (`User`, `Device`, `Conversation`, `Scene`, `DetectedObject`,
+`Message`), migration inicial via Alembic e repositories (`SceneRepository`,
+`ConversationRepository`, `MessageRepository`, `ObjectRepository`) testados. YOLO, Ollama,
+armazenamento de imagens e o aplicativo Android ainda não foram implementados.
