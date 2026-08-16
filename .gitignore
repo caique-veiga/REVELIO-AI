@@ -31,3 +31,4 @@ data/images/*
 
 # Pesos de modelos (YOLO baixa automaticamente em tempo de execução)
 *.pt
+validation_yolo_tests/*
