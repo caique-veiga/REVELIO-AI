@@ -42,7 +42,8 @@ privada/VPN — o endereço do Ollama é sempre configurável via `OLLAMA_BASE_U
 
 - Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, PostgreSQL
 - Pillow para validação/inspeção de imagens; armazenamento local em `data/images/`
-- YOLO (COCO) + OpenCV para visão computacional (ainda não integrado nesta etapa)
+- YOLO (Ultralytics, pré-treinado em COCO) para detecção de objetos, rodando em CPU
+- OpenCV para estimativa de cor (ainda não integrado nesta etapa)
 - Ollama + Qwen 3.5 4B para a VLM (ainda não integrado nesta etapa)
 - pytest, Ruff, mypy
 
@@ -97,6 +98,25 @@ curl http://localhost:8000/health
 # {"status": "ok"}
 ```
 
+### Detecção de objetos (YOLO)
+
+O modelo é configurável via `YOLO_MODEL` (padrão: `yolov8n.pt`, a variante *nano* do YOLOv8 —
+pequena o bastante para rodar em CPU) e o limiar de confiança via `YOLO_CONFIDENCE_THRESHOLD`
+(padrão: `0.5`). O modelo **não é treinado** nesta versão — apenas inferência com pesos
+pré-treinados no COCO (80 classes).
+
+Ao instanciar `YOLOObjectDetector`, a biblioteca `ultralytics` baixa automaticamente os pesos
+correspondentes (ex.: `yolov8n.pt`) do repositório oficial na primeira execução, cacheando o
+arquivo localmente (por padrão, no diretório de trabalho atual). Não é necessário baixar nada
+manualmente para desenvolvimento — só é preciso acesso à internet na primeira execução. Para usar
+pesos já baixados (ou um modelo próprio), aponte `YOLO_MODEL` para o caminho do arquivo `.pt`.
+
+Para testar a detecção contra uma imagem real:
+
+```bash
+uv run python scripts/test_detection.py caminho/para/imagem.jpg
+```
+
 ### Testes e qualidade
 
 ```bash
@@ -116,5 +136,8 @@ PostgreSQL: models SQLAlchemy 2.x (`User`, `Device`, `Conversation`, `Scene`, `D
 `ConversationRepository`, `MessageRepository`, `ObjectRepository`) testados. Armazenamento local de
 imagens: `ImageStorage` (protocol) e `LocalImageStorage` — organiza os arquivos por data
 (`data/images/AAAA/MM/DD/{scene_id}.jpg`), valida extensão/MIME/tamanho máximo/integridade e
-calcula SHA-256; a imagem nunca é salva como BYTEA no banco. YOLO, Ollama e o aplicativo Android
-ainda não foram implementados.
+calcula SHA-256; a imagem nunca é salva como BYTEA no banco. Detecção de objetos: `ObjectDetector`
+(protocol) e `YOLOObjectDetector` — recebe bytes de imagem e retorna uma lista de `Detection`
+(`object_id`, `class_id`, `class_name`, `confidence`, `bbox`), sem vazar tipos da Ultralytics para
+o domínio. Posição, cor, Scene Builder, Ollama e o aplicativo Android ainda não foram
+implementados.
