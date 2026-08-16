@@ -139,5 +139,9 @@ imagens: `ImageStorage` (protocol) e `LocalImageStorage` — organiza os arquivo
 calcula SHA-256; a imagem nunca é salva como BYTEA no banco. Detecção de objetos: `ObjectDetector`
 (protocol) e `YOLOObjectDetector` — recebe bytes de imagem e retorna uma lista de `Detection`
 (`object_id`, `class_id`, `class_name`, `confidence`, `bbox`), sem vazar tipos da Ultralytics para
-o domínio. Posição, cor, Scene Builder, Ollama e o aplicativo Android ainda não foram
-implementados.
+o domínio; validado com imagens reais via `scripts/validate_yolo.py`. Posição espacial:
+`PositionAnalyzer` (domain service, sem dependência externa) — mapeia o centro do bbox em um grid
+3x3 (`horizontal`: left/center/right, `vertical`: top/middle/bottom, `region`: combinação das duas,
+ex. `front-center`), sem inferir distância, GPS ou profundidade; `Detection.position` é opcional
+(preenchido por um passo separado, não pelo próprio detector). Cor, Scene Builder, Ollama e o
+aplicativo Android ainda não foram implementados.
