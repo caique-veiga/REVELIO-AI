@@ -43,7 +43,7 @@ privada/VPN — o endereço do Ollama é sempre configurável via `OLLAMA_BASE_U
 - Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, PostgreSQL
 - Pillow para validação/inspeção de imagens; armazenamento local em `data/images/`
 - YOLO (Ultralytics, pré-treinado em COCO) para detecção de objetos, rodando em CPU
-- OpenCV para estimativa de cor (ainda não integrado nesta etapa)
+- OpenCV (HSV) para estimativa da cor predominante de cada objeto detectado
 - Ollama + Qwen 3.5 4B para a VLM (ainda não integrado nesta etapa)
 - pytest, Ruff, mypy
 
@@ -117,6 +117,43 @@ Para testar a detecção contra uma imagem real:
 uv run python scripts/test_detection.py caminho/para/imagem.jpg
 ```
 
+### Cor predominante (OpenCV)
+
+`OpenCVColorAnalyzer` recebe os bytes da imagem original e um `BoundingBox`, recorta a região,
+converte para HSV e classifica a cor predominante em um de 12 buckets (`black`, `white`, `gray`,
+`red`, `orange`, `yellow`, `green`, `cyan`, `blue`, `purple`, `pink`, `brown`) usando limiares de
+matiz/saturação/valor. O resultado é **apenas** "a cor predominante da região detectada" — não
+tenta localizar semanticamente uma parte do objeto (ex. a camisa de uma pessoa).
+
+Para reduzir a chance do fundo dominar o resultado, o recorte usado na análise descarta uma faixa
+das bordas do bbox (`inset_ratio`, padrão 15%) antes de classificar; a cor vencedora é escolhida
+por votação de pixels (não pela média simples de toda a região), e o `confidence` retornado é a
+fração de pixels do recorte que caiu no bucket vencedor.
+
+**Limitações conhecidas** (herdadas de qualquer classificação de cor por pixel, sem correção de
+cena):
+- **Iluminação**: sombras fortes ou luz muito quente/fria deslocam a cor percebida (ex. um objeto
+  branco sob luz amarela pode ser lido como `orange`/`yellow`).
+- **Reflexos**: superfícies brilhantes/metálicas geram destaques quase brancos que competem com a
+  cor real do objeto.
+- **Fundo**: o mitigador de inset ajuda, mas não elimina o problema — bboxes que abraçam mal o
+  objeto (comum em objetos irregulares/finos, como o `knife` observado na validação) ainda
+  misturam pixels de fundo.
+- **Bounding boxes grandes**: quanto maior a caixa, maior a chance de conter múltiplas cores reais
+  (ex. um `couch` com estampa, ou uma pessoa com roupas de cores diferentes) — o resultado é
+  sempre "a cor que mais aparece", não "a cor de cada parte".
+
+O classificador (regras de matiz/saturação/valor em `_build_classification_rules`) foi isolado do
+resto do pipeline de propósito, para permitir troca futura (ex. clustering, modelo treinado) sem
+alterar a interface `ColorAnalyzer`.
+
+Para validar detecção + cor contra imagens reais (gera crops e um `results.json`):
+
+```bash
+uv run python scripts/validate_color_analyzer.py caminho/para/diretorio-de-imagens
+# saída em <diretorio-de-imagens>/output/
+```
+
 ### Testes e qualidade
 
 ```bash
@@ -143,5 +180,8 @@ o domínio; validado com imagens reais via `scripts/validate_yolo.py`. Posição
 `PositionAnalyzer` (domain service, sem dependência externa) — mapeia o centro do bbox em um grid
 3x3 (`horizontal`: left/center/right, `vertical`: top/middle/bottom, `region`: combinação das duas,
 ex. `front-center`), sem inferir distância, GPS ou profundidade; `Detection.position` é opcional
-(preenchido por um passo separado, não pelo próprio detector). Cor, Scene Builder, Ollama e o
-aplicativo Android ainda não foram implementados.
+(preenchido por um passo separado, não pelo próprio detector). Cor predominante: `ColorAnalyzer`
+(protocol) e `OpenCVColorAnalyzer` — recorta o bbox, classifica em HSV (12 cores) e retorna
+`ColorResult` (`name`, `rgb`, `confidence`); validado com imagens reais via
+`scripts/validate_color_analyzer.py`. Scene Builder, Ollama e o aplicativo Android ainda não foram
+implementados.

@@ -14,6 +14,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pillow>=11.0",
     "numpy>=1.26",
+    "opencv-python>=4.9",
     "torch>=2.0",
     "torchvision>=0.15",
     "ultralytics>=8.3",
