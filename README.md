@@ -41,6 +41,7 @@ privada/VPN — o endereço do Ollama é sempre configurável via `OLLAMA_BASE_U
 ## Stack
 
 - Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, PostgreSQL
+- Pillow para validação/inspeção de imagens; armazenamento local em `data/images/`
 - YOLO (COCO) + OpenCV para visão computacional (ainda não integrado nesta etapa)
 - Ollama + Qwen 3.5 4B para a VLM (ainda não integrado nesta etapa)
 - pytest, Ruff, mypy
@@ -109,8 +110,11 @@ Os testes de repository rodam contra um SQLite em memória (não é necessário 
 
 ## Status atual
 
-Fundação do backend (estrutura modular, configuração tipada, `GET /health`) e persistência
+Fundação do backend (estrutura modular, configuração tipada, `GET /health`), persistência
 PostgreSQL: models SQLAlchemy 2.x (`User`, `Device`, `Conversation`, `Scene`, `DetectedObject`,
 `Message`), migration inicial via Alembic e repositories (`SceneRepository`,
-`ConversationRepository`, `MessageRepository`, `ObjectRepository`) testados. YOLO, Ollama,
-armazenamento de imagens e o aplicativo Android ainda não foram implementados.
+`ConversationRepository`, `MessageRepository`, `ObjectRepository`) testados. Armazenamento local de
+imagens: `ImageStorage` (protocol) e `LocalImageStorage` — organiza os arquivos por data
+(`data/images/AAAA/MM/DD/{scene_id}.jpg`), valida extensão/MIME/tamanho máximo/integridade e
+calcula SHA-256; a imagem nunca é salva como BYTEA no banco. YOLO, Ollama e o aplicativo Android
+ainda não foram implementados.
