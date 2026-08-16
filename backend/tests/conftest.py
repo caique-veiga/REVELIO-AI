@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.infrastructure.database.base import Base
-from app.infrastructure.database.models import DetectedObject, Scene, User
+from app.infrastructure.database.models import DetectedObject, SceneModel, User
 
 
 @pytest.fixture
@@ -53,8 +53,8 @@ def user(db_session: Session) -> User:
 
 
 @pytest.fixture
-def scene_factory() -> Callable[..., Scene]:
-    def _make(**overrides: object) -> Scene:
+def scene_factory() -> Callable[..., SceneModel]:
+    def _make(**overrides: object) -> SceneModel:
         defaults: dict[str, object] = {
             "image_storage_key": f"data/images/{uuid.uuid4()}.jpg",
             "image_filename": "photo.jpg",
@@ -64,7 +64,7 @@ def scene_factory() -> Callable[..., Scene]:
             "image_size_bytes": 204800,
         }
         defaults.update(overrides)
-        return Scene(**defaults)
+        return SceneModel(**defaults)
 
     return _make
 

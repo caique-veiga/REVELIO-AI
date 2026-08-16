@@ -3,12 +3,12 @@ from collections.abc import Callable
 
 from sqlalchemy.orm import Session
 
-from app.infrastructure.database.models import Scene
+from app.infrastructure.database.models import SceneModel
 from app.infrastructure.repositories.scene_repository import SqlAlchemySceneRepository
 
 
 def test_add_persists_scene_and_assigns_id(
-    db_session: Session, scene_factory: Callable[..., Scene]
+    db_session: Session, scene_factory: Callable[..., SceneModel]
 ) -> None:
     repository = SqlAlchemySceneRepository(db_session)
 
@@ -19,7 +19,7 @@ def test_add_persists_scene_and_assigns_id(
 
 
 def test_get_by_id_returns_persisted_scene(
-    db_session: Session, scene_factory: Callable[..., Scene]
+    db_session: Session, scene_factory: Callable[..., SceneModel]
 ) -> None:
     repository = SqlAlchemySceneRepository(db_session)
     scene = repository.add(scene_factory())

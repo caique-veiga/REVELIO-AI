@@ -4,7 +4,7 @@ from collections.abc import Callable
 from sqlalchemy.orm import Session
 
 from app.domain.entities.message_role import MessageRole
-from app.infrastructure.database.models import Conversation, Message, Scene, User
+from app.infrastructure.database.models import Conversation, Message, SceneModel, User
 from app.infrastructure.repositories.conversation_repository import (
     SqlAlchemyConversationRepository,
 )
@@ -13,7 +13,7 @@ from app.infrastructure.repositories.scene_repository import SqlAlchemySceneRepo
 
 
 def _make_conversation(
-    db_session: Session, user: User, scene_factory: Callable[..., Scene]
+    db_session: Session, user: User, scene_factory: Callable[..., SceneModel]
 ) -> Conversation:
     scene = SqlAlchemySceneRepository(db_session).add(scene_factory())
     return SqlAlchemyConversationRepository(db_session).add(
@@ -22,7 +22,7 @@ def _make_conversation(
 
 
 def test_add_persists_message_linked_to_conversation(
-    db_session: Session, user: User, scene_factory: Callable[..., Scene]
+    db_session: Session, user: User, scene_factory: Callable[..., SceneModel]
 ) -> None:
     conversation = _make_conversation(db_session, user, scene_factory)
     repository = SqlAlchemyMessageRepository(db_session)
@@ -40,7 +40,7 @@ def test_add_persists_message_linked_to_conversation(
 
 
 def test_list_by_conversation_id_returns_messages_in_chronological_order(
-    db_session: Session, user: User, scene_factory: Callable[..., Scene]
+    db_session: Session, user: User, scene_factory: Callable[..., SceneModel]
 ) -> None:
     conversation = _make_conversation(db_session, user, scene_factory)
     repository = SqlAlchemyMessageRepository(db_session)
@@ -64,7 +64,7 @@ def test_list_by_conversation_id_returns_messages_in_chronological_order(
 
 
 def test_list_by_conversation_id_does_not_leak_messages_from_other_conversations(
-    db_session: Session, user: User, scene_factory: Callable[..., Scene]
+    db_session: Session, user: User, scene_factory: Callable[..., SceneModel]
 ) -> None:
     conversation_one = _make_conversation(db_session, user, scene_factory)
     conversation_two = _make_conversation(db_session, user, scene_factory)
