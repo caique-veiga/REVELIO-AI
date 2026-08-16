@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Virtual environment
+.venv/
+venv/
+
+# Environment variables
+.env
+
+# Testing & quality tools
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Dados capturados em runtime (imagens ficam fora do controle de versão)
+data/images/*
+!data/images/.gitkeep
