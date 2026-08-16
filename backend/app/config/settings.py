@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen3.5:4b"
 
     image_storage_path: str = "data/images"
+    max_image_size_bytes: int = 10_485_760
 
     yolo_model: str = "yolov8n.pt"
     yolo_confidence_threshold: float = 0.5
