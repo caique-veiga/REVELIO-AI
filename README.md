@@ -154,6 +154,33 @@ uv run python scripts/validate_color_analyzer.py caminho/para/diretorio-de-image
 # saída em <diretorio-de-imagens>/output/
 ```
 
+### API
+
+`POST /api/v1/scenes` recebe uma imagem (`multipart/form-data`, campo `file`) e executa o fluxo
+completo: valida a imagem, salva no filesystem local, roda YOLO, calcula posição e cor de cada
+objeto, monta a `Scene` e persiste `Scene`, `Conversation` e os `DetectedObject`s no PostgreSQL —
+cada chamada sempre cria uma nova `Scene` e uma nova `Conversation` (nunca reaproveita uma
+existente). Retorna:
+
+```json
+{
+  "scene_id": "...",
+  "conversation_id": "...",
+  "object_count": 3,
+  "status": "created"
+}
+```
+
+Erros de imagem inválida/não suportada retornam `400`, imagem grande demais retorna `413`; qualquer
+outra falha inesperada retorna `500` (logada no servidor, sem vazar detalhes internos na resposta).
+
+```bash
+curl -X POST http://localhost:8000/api/v1/scenes -F "file=@caminho/para/imagem.jpg"
+```
+
+Como ainda não há autenticação/gestão de usuários, o serviço reutiliza um único usuário padrão
+(criado automaticamente na primeira cena) como dono provisório de todas as conversations.
+
 ### Testes e qualidade
 
 ```bash
@@ -190,5 +217,9 @@ não chama `PositionAnalyzer`/`ColorAnalyzer` ele mesmo (isso é papel do futuro
 `SceneSchema` (Pydantic, em `api/schemas/`) serializa exatamente o formato descrito na seção 11 do
 contexto, incluindo a chave `class` (reservada em Python — mapeada via `Field(alias="class")`).
 Pipeline completo (`ObjectDetector` mockado + `PositionAnalyzer`/`OpenCVColorAnalyzer` reais +
-`SceneBuilder` + `SceneSchema`) coberto por testes de integração. Ollama e o aplicativo Android
-ainda não foram implementados.
+`SceneBuilder` + `SceneSchema`) coberto por testes de integração. API: `SceneService`
+(`application/services/`) orquestra o fluxo ponta a ponta (imagem → YOLO → posição → cor →
+`SceneBuilder` → PostgreSQL) e `POST /api/v1/scenes` (`SceneController`) o expõe via HTTP, com
+injeção de dependências em `api/dependencies.py` e tratamento de erros mapeando exceções de domínio
+para status HTTP. `GET /api/v1/scenes/{scene_id}`, conversas/mensagens, Ollama e o aplicativo
+Android ainda não foram implementados.
