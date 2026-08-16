@@ -34,7 +34,7 @@ class Device(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     user: Mapped["User"] = relationship(back_populates="devices")
 
 
-class Scene(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+class SceneModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "scenes"
 
     image_storage_key: Mapped[str] = mapped_column(String(512), unique=True)
@@ -59,7 +59,7 @@ class Conversation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     scene_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenes.id"), index=True)
 
     user: Mapped["User"] = relationship(back_populates="conversations")
-    scene: Mapped["Scene"] = relationship(back_populates="conversation")
+    scene: Mapped["SceneModel"] = relationship(back_populates="conversation")
     messages: Mapped[list["Message"]] = relationship(
         back_populates="conversation",
         cascade="all, delete-orphan",
@@ -91,7 +91,7 @@ class DetectedObject(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     color_b: Mapped[int] = mapped_column(Integer)
     color_confidence: Mapped[float] = mapped_column(Float)
 
-    scene: Mapped["Scene"] = relationship(back_populates="detected_objects")
+    scene: Mapped["SceneModel"] = relationship(back_populates="detected_objects")
 
 
 class Message(UUIDPrimaryKeyMixin, Base):

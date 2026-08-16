@@ -2,14 +2,14 @@ from collections.abc import Callable
 
 from sqlalchemy.orm import Session
 
-from app.infrastructure.database.models import DetectedObject, Scene
+from app.infrastructure.database.models import DetectedObject, SceneModel
 from app.infrastructure.repositories.object_repository import SqlAlchemyObjectRepository
 from app.infrastructure.repositories.scene_repository import SqlAlchemySceneRepository
 
 
 def test_add_many_persists_all_detected_objects(
     db_session: Session,
-    scene_factory: Callable[..., Scene],
+    scene_factory: Callable[..., SceneModel],
     detected_object_factory: Callable[..., DetectedObject],
 ) -> None:
     scene = SqlAlchemySceneRepository(db_session).add(scene_factory())
@@ -27,7 +27,7 @@ def test_add_many_persists_all_detected_objects(
 
 def test_list_by_scene_id_returns_only_objects_from_that_scene(
     db_session: Session,
-    scene_factory: Callable[..., Scene],
+    scene_factory: Callable[..., SceneModel],
     detected_object_factory: Callable[..., DetectedObject],
 ) -> None:
     scene_one = SqlAlchemySceneRepository(db_session).add(scene_factory())
