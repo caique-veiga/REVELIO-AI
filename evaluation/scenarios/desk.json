@@ -1,0 +1,25 @@
+{
+  "scenario_id": "desk",
+  "name": "Mesa de trabalho",
+  "image": "validation_yolo_tests/Screenshot from 2026-08-16 07-55-37.png",
+  "known_objects": ["laptop", "cell phone"],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "general",
+      "content": "O que tem em cima da mesa?",
+      "expected_keywords": ["notebook", "laptop", "computador", "celular", "telefone"]
+    },
+    {
+      "id": "q2",
+      "type": "color",
+      "content": "Qual a cor do notebook?",
+      "expected_keywords": ["cinza", "prata", "preto"]
+    },
+    {
+      "id": "q3",
+      "type": "object_absence",
+      "content": "Tem um cachorro em cima da mesa?"
+    }
+  ]
+}

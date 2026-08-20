@@ -1,0 +1,26 @@
+{
+  "scenario_id": "pet_dog",
+  "name": "Cachorro (contexto/follow-up)",
+  "image": "validation_yolo_tests/images.jpeg",
+  "known_objects": ["dog"],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "general",
+      "content": "Que animal é esse?",
+      "expected_keywords": ["cachorro", "cão", "cao", "dog"]
+    },
+    {
+      "id": "q2",
+      "type": "color",
+      "content": "Qual a cor dele?",
+      "expected_keywords": ["laranja", "bege", "caramelo", "marrom", "dourado"],
+      "checks_context": true
+    },
+    {
+      "id": "q3",
+      "type": "object_absence",
+      "content": "Tem um gato junto com ele?"
+    }
+  ]
+}

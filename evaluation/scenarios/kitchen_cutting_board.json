@@ -1,0 +1,25 @@
+{
+  "scenario_id": "kitchen_cutting_board",
+  "name": "Tábua de frutas",
+  "image": "validation_yolo_tests/uma-prancha-de-corte-com-frutos-cortados-em-cima-e-faca-um-mamão-melancia-laranja-abacaxi-bananas-222354532.jpg",
+  "known_objects": ["banana", "knife", "bowl"],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "general",
+      "content": "O que tem na tábua?",
+      "expected_keywords": ["banana", "faca", "tigela", "bacia"]
+    },
+    {
+      "id": "q2",
+      "type": "spatial",
+      "content": "Onde estão as bananas?",
+      "expected_keywords": ["esquerda"]
+    },
+    {
+      "id": "q3",
+      "type": "object_absence",
+      "content": "Tem uma maçã na tábua?"
+    }
+  ]
+}
