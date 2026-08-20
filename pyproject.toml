@@ -19,12 +19,12 @@ dependencies = [
     "torch>=2.0",
     "torchvision>=0.15",
     "ultralytics>=8.3",
+    "httpx>=0.27",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.3",
-    "httpx>=0.27",
     "ruff>=0.7",
     "mypy>=1.13",
 ]

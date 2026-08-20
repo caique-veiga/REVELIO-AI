@@ -1,0 +1,36 @@
+from typing import Protocol
+
+from app.domain.entities.conversation_message import ConversationMessage
+from app.domain.entities.vlm_response import VLMResponse
+
+
+class VisionLanguageModelError(Exception):
+    """Erro base para falhas de comunicação com a VLM."""
+
+
+class OllamaUnavailableError(VisionLanguageModelError):
+    """O Ollama em si não pôde ser alcançado (conexão, timeout, erro de transporte)."""
+
+
+class ModelUnavailableError(VisionLanguageModelError):
+    """O Ollama está acessível, mas o modelo configurado não está disponível nele."""
+
+
+class VisionLanguageModel(Protocol):
+    def health_check(self) -> None:
+        """Verifica se o Ollama está acessível e se o modelo configurado existe.
+
+        Levanta OllamaUnavailableError ou ModelUnavailableError quando algo não
+        está pronto; não retorna nada quando está tudo certo.
+        """
+        ...
+
+    def ask(
+        self,
+        *,
+        image: bytes,
+        scene_json: dict[str, object],
+        system_prompt: str,
+        conversation_history: list[ConversationMessage],
+        question: str,
+    ) -> VLMResponse: ...

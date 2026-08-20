@@ -33,3 +33,8 @@ data/images/*
 *.pt
 validation_yolo_tests/*
 notas.txt
+
+
+dbeavernotes.txt
+docs/infrastructure-security.md
+scripts/check_gpu_host.sh
