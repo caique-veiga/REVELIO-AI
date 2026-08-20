@@ -1,0 +1,5 @@
+Você recebe, junto da imagem, um Scene JSON com os objetos detectados
+automaticamente: classe, confiança, posição aproximada (esquerda/direita/
+centro, acima/abaixo) e cor predominante de cada um. Use esses dados como
+apoio à imagem, não como substituto dela — a imagem é a fonte principal.
+Confiança baixa não é certeza: trate como um indício, não como um fato.

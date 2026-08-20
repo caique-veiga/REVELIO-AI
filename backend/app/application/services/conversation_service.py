@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.api.schemas.scene_schema import SceneSchema
+from app.application.services.prompt_composer import PromptComposer
 from app.domain.entities.bounding_box import BoundingBox
 from app.domain.entities.color_result import ColorName, ColorResult
 from app.domain.entities.conversation_answer import ConversationAnswer, ReferencedObject
@@ -24,8 +25,6 @@ from app.infrastructure.repositories.message_repository import SqlAlchemyMessage
 from app.infrastructure.repositories.object_repository import SqlAlchemyObjectRepository
 from app.infrastructure.repositories.scene_repository import SqlAlchemySceneRepository
 
-PROMPT_VERSION = "v1"
-
 
 class ConversationService:
     """Orquestra uma pergunta sobre a cena atual de uma conversation:
@@ -45,13 +44,13 @@ class ConversationService:
         image_storage: ImageStorage,
         vision_language_model: VisionLanguageModel,
         model_metadata: ModelMetadata,
-        system_prompt: str,
+        prompt_composer: PromptComposer,
     ) -> None:
         self._session = session
         self._image_storage = image_storage
         self._vision_language_model = vision_language_model
         self._model_metadata = model_metadata
-        self._system_prompt = system_prompt
+        self._prompt_composer = prompt_composer
         self._conversation_repository = SqlAlchemyConversationRepository(session)
         self._message_repository = SqlAlchemyMessageRepository(session)
         self._object_repository = SqlAlchemyObjectRepository(session)
@@ -72,6 +71,8 @@ class ConversationService:
         history_rows = self._message_repository.list_by_conversation_id(conversation_id)
         history = [ConversationMessage(role=row.role, content=row.content) for row in history_rows]
 
+        system_prompt, prompt_version = self._prompt_composer.build(question)
+
         self._message_repository.add(
             Message(conversation_id=conversation_id, role=MessageRole.USER, content=question)
         )
@@ -79,7 +80,7 @@ class ConversationService:
         vlm_response = self._vision_language_model.ask(
             image=image_bytes,
             scene_json=scene_json,
-            system_prompt=self._system_prompt,
+            system_prompt=system_prompt,
             conversation_history=history,
             question=question,
         )
@@ -90,7 +91,7 @@ class ConversationService:
                 role=MessageRole.ASSISTANT,
                 content=vlm_response.text,
                 model_name=vlm_response.model,
-                prompt_version=PROMPT_VERSION,
+                prompt_version=prompt_version,
                 latency_ms=round(vlm_response.duration_ms),
             )
         )

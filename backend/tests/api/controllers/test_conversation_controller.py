@@ -2,10 +2,13 @@ import uuid
 from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.domain.entities.bounding_box import BoundingBox
 from app.domain.entities.detection import Detection
+from app.domain.entities.message_role import MessageRole
 from app.domain.entities.vlm_response import VLMResponse
+from app.infrastructure.database.models import Message
 
 
 def make_detection(**overrides: object) -> Detection:
@@ -203,3 +206,24 @@ def test_follow_up_question_has_sufficient_history_context(
         "A mochila é azul.",
     ]
     assert third_call_kwargs["question"] == "E onde ela está?"
+
+
+def test_prompt_version_reflects_the_selected_question_type(
+    api_client: TestClient,
+    api_db_session: Session,
+    fake_object_detector: MagicMock,
+    fake_vision_language_model: MagicMock,
+    jpeg_bytes: bytes,
+) -> None:
+    scene = create_scene(api_client, fake_object_detector, jpeg_bytes)
+    fake_vision_language_model.ask.return_value = VLMResponse(
+        text="A mochila está à esquerda.", model="qwen3.5:4b", duration_ms=80.0
+    )
+
+    api_client.post(
+        f"/api/v1/conversations/{scene['conversation_id']}/messages",
+        json={"content": "Onde está a mochila?"},
+    )
+
+    assistant_message = api_db_session.query(Message).filter_by(role=MessageRole.ASSISTANT).one()
+    assert assistant_message.prompt_version == "spatial_v1"
