@@ -1,8 +1,10 @@
 from functools import lru_cache
+from pathlib import Path
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.application.services.conversation_service import ConversationService
 from app.application.services.scene_service import SceneService
 from app.config.settings import get_settings
 from app.domain.entities.model_metadata import ModelMetadata
@@ -87,4 +89,26 @@ def get_scene_service(
         color_analyzer=color_analyzer,
         scene_builder=scene_builder,
         model_metadata=model_metadata,
+    )
+
+
+@lru_cache
+def get_system_prompt() -> str:
+    settings = get_settings()
+    return Path(settings.system_prompt_path).read_text(encoding="utf-8")
+
+
+def get_conversation_service(
+    session: Session = Depends(get_db_session),
+    image_storage: ImageStorage = Depends(get_image_storage),
+    vision_language_model: VisionLanguageModel = Depends(get_vision_language_model),
+    model_metadata: ModelMetadata = Depends(get_model_metadata),
+    system_prompt: str = Depends(get_system_prompt),
+) -> ConversationService:
+    return ConversationService(
+        session=session,
+        image_storage=image_storage,
+        vision_language_model=vision_language_model,
+        model_metadata=model_metadata,
+        system_prompt=system_prompt,
     )

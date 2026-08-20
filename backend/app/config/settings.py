@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen3.5:4b"
     ollama_timeout_seconds: float = 30.0
     ollama_max_retries: int = 2
+    system_prompt_path: str = "prompts/system/default.md"
 
     image_storage_path: str = "data/images"
     max_image_size_bytes: int = 10_485_760

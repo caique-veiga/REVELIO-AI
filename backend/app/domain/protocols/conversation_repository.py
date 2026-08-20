@@ -5,6 +5,10 @@ if TYPE_CHECKING:
     from app.infrastructure.database.models import Conversation
 
 
+class ConversationNotFoundError(Exception):
+    """Levantado quando a conversation solicitada não existe."""
+
+
 class ConversationRepository(Protocol):
     def add(self, conversation: "Conversation") -> "Conversation": ...
 
