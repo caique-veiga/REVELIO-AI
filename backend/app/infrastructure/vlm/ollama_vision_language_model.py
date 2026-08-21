@@ -8,6 +8,7 @@ import httpx
 from app.domain.entities.conversation_message import ConversationMessage
 from app.domain.entities.vlm_response import VLMResponse
 from app.domain.protocols.vision_language_model import (
+    EmptyModelResponseError,
     ModelUnavailableError,
     OllamaUnavailableError,
     VisionLanguageModelError,
@@ -36,12 +37,14 @@ class OllamaVisionLanguageModel:
         model: str,
         timeout_seconds: float = 30.0,
         max_retries: int = 2,
+        num_ctx: int = 8192,
         client: httpx.Client | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._timeout_seconds = timeout_seconds
         self._max_retries = max_retries
+        self._num_ctx = num_ctx
         self._client = client if client is not None else httpx.Client()
 
     def health_check(self) -> None:
@@ -87,7 +90,16 @@ class OllamaVisionLanguageModel:
             }
         )
 
-        payload = {"model": self._model, "messages": messages, "stream": False}
+        # `num_ctx` explícito: sem isso o Ollama usa um padrão pequeno
+        # (observado: 4096 tokens no total prompt+geração). Modelos com
+        # "thinking" (qwen3.5) podem gastar todo esse orçamento raciocinando
+        # e nunca chegar a escrever `content` — ver EmptyModelResponseError.
+        payload = {
+            "model": self._model,
+            "messages": messages,
+            "stream": False,
+            "options": {"num_ctx": self._num_ctx},
+        }
 
         started = time.monotonic()
         last_error: Exception | None = None
@@ -124,11 +136,28 @@ class OllamaVisionLanguageModel:
             duration_ms = (time.monotonic() - started) * 1000
             data = response.json()
             answer = data["message"]["content"]
+            done_reason = data.get("done_reason")
+
+            if not answer.strip():
+                logger.error(
+                    "ollama returned empty content model=%s done_reason=%s "
+                    "eval_count=%s prompt_eval_count=%s duration_ms=%.1f",
+                    self._model,
+                    done_reason,
+                    data.get("eval_count"),
+                    data.get("prompt_eval_count"),
+                    duration_ms,
+                )
+                raise EmptyModelResponseError(
+                    f"Ollama retornou content vazio (done_reason={done_reason})"
+                )
+
             logger.info(
-                "ollama request succeeded model=%s duration_ms=%.1f attempt=%d",
+                "ollama request succeeded model=%s duration_ms=%.1f attempt=%d done_reason=%s",
                 self._model,
                 duration_ms,
                 attempt,
+                done_reason,
             )
             return VLMResponse(text=answer, model=self._model, duration_ms=duration_ms)
 

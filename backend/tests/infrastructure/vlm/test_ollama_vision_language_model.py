@@ -8,6 +8,7 @@ import pytest
 from app.domain.entities.conversation_message import ConversationMessage
 from app.domain.entities.message_role import MessageRole
 from app.domain.protocols.vision_language_model import (
+    EmptyModelResponseError,
     ModelUnavailableError,
     OllamaUnavailableError,
     VisionLanguageModelError,
@@ -79,6 +80,8 @@ def test_ask_sends_image_scene_json_history_and_question() -> None:
 
     assert captured["model"] == MODEL
     assert captured["stream"] is False
+    options = cast(dict[str, object], captured["options"])
+    assert cast(int, options["num_ctx"]) > 0
     messages = cast(list[dict[str, object]], captured["messages"])
     assert messages[0] == {"role": "system", "content": "Você é um assistente visual."}
     assert messages[1] == {"role": "user", "content": "oi"}
@@ -153,3 +156,34 @@ def test_ask_succeeds_after_one_transient_failure() -> None:
 
     assert response.text == "ok"
     assert call_count == 2
+
+
+def test_ask_raises_empty_model_response_error_when_content_is_empty() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/tags":
+            return tags_response([MODEL])
+        return httpx.Response(
+            200,
+            json={
+                "message": {"content": "", "thinking": "raciocínio interno bem longo..."},
+                "done": True,
+                "done_reason": "length",
+                "eval_count": 1218,
+                "prompt_eval_count": 2878,
+            },
+        )
+
+    vlm = make_vlm(handler)
+    with pytest.raises(EmptyModelResponseError):
+        vlm.ask(image=b"x", scene_json={}, system_prompt="s", conversation_history=[], question="q")
+
+
+def test_ask_raises_empty_model_response_error_when_content_is_only_whitespace() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/tags":
+            return tags_response([MODEL])
+        return httpx.Response(200, json={"message": {"content": "   \n"}, "done_reason": "stop"})
+
+    vlm = make_vlm(handler)
+    with pytest.raises(EmptyModelResponseError):
+        vlm.ask(image=b"x", scene_json={}, system_prompt="s", conversation_history=[], question="q")

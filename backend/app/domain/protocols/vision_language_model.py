@@ -16,6 +16,18 @@ class ModelUnavailableError(VisionLanguageModelError):
     """O Ollama está acessível, mas o modelo configurado não está disponível nele."""
 
 
+class EmptyModelResponseError(VisionLanguageModelError):
+    """O Ollama respondeu com sucesso, mas `message.content` veio vazio.
+
+    Causa observada (ETAPA 13.1): modelos com "thinking" (ex. qwen3.5) podem
+    consumir todo o orçamento de geração (`num_ctx`) raciocinando
+    internamente antes de escrever a resposta final — se isso acontece,
+    a geração é cortada (`done_reason=length`) antes do modelo sequer
+    começar a escrever `content`. Não deve ser mascarado com um texto
+    padrão; quem chama decide a política de retry/fallback.
+    """
+
+
 class VisionLanguageModel(Protocol):
     def health_check(self) -> None:
         """Verifica se o Ollama está acessível e se o modelo configurado existe.

@@ -72,6 +72,7 @@ def get_vision_language_model() -> VisionLanguageModel:
         model=settings.ollama_model,
         timeout_seconds=settings.ollama_timeout_seconds,
         max_retries=settings.ollama_max_retries,
+        num_ctx=settings.ollama_num_ctx,
     )
 
 

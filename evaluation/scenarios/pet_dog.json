@@ -15,7 +15,8 @@
       "type": "color",
       "content": "Qual a cor dele?",
       "expected_keywords": ["laranja", "bege", "caramelo", "marrom", "dourado"],
-      "checks_context": true
+      "checks_context": true,
+      "context_object": "dog"
     },
     {
       "id": "q3",

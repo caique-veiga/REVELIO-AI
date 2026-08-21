@@ -73,28 +73,37 @@ class ConversationService:
 
         system_prompt, prompt_version = self._prompt_composer.build(question)
 
-        self._message_repository.add(
-            Message(conversation_id=conversation_id, role=MessageRole.USER, content=question)
-        )
-
-        vlm_response = self._vision_language_model.ask(
-            image=image_bytes,
-            scene_json=scene_json,
-            system_prompt=system_prompt,
-            conversation_history=history,
-            question=question,
-        )
-
-        self._message_repository.add(
-            Message(
-                conversation_id=conversation_id,
-                role=MessageRole.ASSISTANT,
-                content=vlm_response.text,
-                model_name=vlm_response.model,
-                prompt_version=prompt_version,
-                latency_ms=round(vlm_response.duration_ms),
+        try:
+            self._message_repository.add(
+                Message(conversation_id=conversation_id, role=MessageRole.USER, content=question)
             )
-        )
+
+            vlm_response = self._vision_language_model.ask(
+                image=image_bytes,
+                scene_json=scene_json,
+                system_prompt=system_prompt,
+                conversation_history=history,
+                question=question,
+            )
+
+            self._message_repository.add(
+                Message(
+                    conversation_id=conversation_id,
+                    role=MessageRole.ASSISTANT,
+                    content=vlm_response.text,
+                    model_name=vlm_response.model,
+                    prompt_version=prompt_version,
+                    latency_ms=round(vlm_response.duration_ms),
+                )
+            )
+
+            # Commit explícito antes de retornar: se a VLM falhar, a
+            # pergunta do usuário registrada acima também é revertida (o
+            # turno inteiro é uma única unidade de trabalho).
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
 
         referenced_objects = self._find_referenced_objects(
             detected_object_rows, question, vlm_response.text

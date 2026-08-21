@@ -59,9 +59,11 @@ def api_client(
     tmp_path: Path,
 ) -> Generator[TestClient, None, None]:
     def _override_db_session() -> Generator[Session, None, None]:
+        # Espelha o get_db_session de produção: só fornece a Session e
+        # faz rollback em erro. O commit é responsabilidade explícita do
+        # Application Service (ver ETAPA 13.1).
         try:
             yield api_db_session
-            api_db_session.commit()
         except Exception:
             api_db_session.rollback()
             raise
