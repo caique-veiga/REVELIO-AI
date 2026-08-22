@@ -17,15 +17,25 @@ class ModelUnavailableError(VisionLanguageModelError):
 
 
 class EmptyModelResponseError(VisionLanguageModelError):
-    """O Ollama respondeu com sucesso, mas `message.content` veio vazio.
+    """O provider respondeu com sucesso, mas não veio nenhum texto de resposta.
 
-    Causa observada (ETAPA 13.1): modelos com "thinking" (ex. qwen3.5) podem
-    consumir todo o orçamento de geração (`num_ctx`) raciocinando
-    internamente antes de escrever a resposta final — se isso acontece,
-    a geração é cortada (`done_reason=length`) antes do modelo sequer
-    começar a escrever `content`. Não deve ser mascarado com um texto
+    Causa observada no Ollama (ETAPA 13.1): modelos com "thinking" (ex.
+    qwen3.5) podem consumir todo o orçamento de geração (`num_ctx`)
+    raciocinando internamente antes de escrever a resposta final — se isso
+    acontece, a geração é cortada (`done_reason=length`) antes do modelo
+    sequer começar a escrever `content`. Não deve ser mascarado com um texto
     padrão; quem chama decide a política de retry/fallback.
     """
+
+
+class VisionProviderUnavailableError(VisionLanguageModelError):
+    """O provider (ex. Gemini) recusou ou não pôde atender a requisição:
+    conexão recusada, chave de API inválida, rate limit ou erro 5xx.
+    """
+
+
+class VisionProviderTimeoutError(VisionLanguageModelError):
+    """O provider não respondeu dentro do timeout configurado."""
 
 
 class VisionLanguageModel(Protocol):

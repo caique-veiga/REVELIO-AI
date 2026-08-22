@@ -11,12 +11,23 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://revelio:revelio@localhost:5432/revelio"
 
+    ollama_enabled: bool = True
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3.5:4b"
     ollama_timeout_seconds: float = 30.0
     ollama_max_retries: int = 2
     ollama_num_ctx: int = 8192
     prompts_root: str = "prompts"
+
+    gemini_enabled: bool = True
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_base_url: str = "https://generativelanguage.googleapis.com"
+    gemini_timeout_seconds: float = 30.0
+
+    image_max_dimension: int = 768
+    image_jpeg_quality: int = 85
+    image_enable_optimization: bool = True
 
     image_storage_path: str = "data/images"
     max_image_size_bytes: int = 10_485_760
