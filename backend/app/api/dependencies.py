@@ -1,3 +1,4 @@
+import logging
 from functools import lru_cache
 
 from fastapi import Depends
@@ -21,7 +22,11 @@ from app.infrastructure.prompts.file_prompt_loader import FilePromptLoader
 from app.infrastructure.storage.local_image_storage import LocalImageStorage
 from app.infrastructure.vision.opencv_color_analyzer import OpenCVColorAnalyzer
 from app.infrastructure.vision.yolo_object_detector import YOLOObjectDetector
+from app.infrastructure.vlm.fallback_vision_language_model import FallbackVisionLanguageModel
+from app.infrastructure.vlm.gemini_vision_language_model import GeminiVisionLanguageModel
 from app.infrastructure.vlm.ollama_vision_language_model import OllamaVisionLanguageModel
+
+logger = logging.getLogger(__name__)
 
 _DETECTOR_TASK = "detect"
 _DETECTOR_DATASET = "COCO"
@@ -67,13 +72,37 @@ def get_model_metadata() -> ModelMetadata:
 @lru_cache
 def get_vision_language_model() -> VisionLanguageModel:
     settings = get_settings()
-    return OllamaVisionLanguageModel(
+
+    if not settings.gemini_enabled:
+        # Gemini é o único fallback suportado (ETAPA 13.1) — sem ele não há
+        # nenhum provider de VLM restante para atender a aplicação.
+        raise RuntimeError(
+            "GEMINI_ENABLED=false, mas o Gemini é o único fallback disponível "
+            "quando o Ollama está desabilitado ou indisponível."
+        )
+
+    gemini = GeminiVisionLanguageModel(
+        api_key=settings.gemini_api_key,
+        model=settings.gemini_model,
+        base_url=settings.gemini_base_url,
+        timeout_seconds=settings.gemini_timeout_seconds,
+        image_max_dimension=settings.image_max_dimension,
+        image_jpeg_quality=settings.image_jpeg_quality,
+        image_enable_optimization=settings.image_enable_optimization,
+    )
+
+    if not settings.ollama_enabled:
+        logger.error("OLLAMA_ENABLED=false — usando Gemini Flash-Lite como único provider de VLM")
+        return gemini
+
+    ollama = OllamaVisionLanguageModel(
         base_url=settings.ollama_base_url,
         model=settings.ollama_model,
         timeout_seconds=settings.ollama_timeout_seconds,
         max_retries=settings.ollama_max_retries,
         num_ctx=settings.ollama_num_ctx,
     )
+    return FallbackVisionLanguageModel(primary=ollama, fallback=gemini)
 
 
 def get_scene_service(

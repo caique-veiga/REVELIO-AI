@@ -15,6 +15,8 @@ from app.domain.protocols.vision_language_model import (
     ModelUnavailableError,
     OllamaUnavailableError,
     VisionLanguageModelError,
+    VisionProviderTimeoutError,
+    VisionProviderUnavailableError,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,10 +34,12 @@ def ask_question(
         answer = conversation_service.ask(conversation_id, request.content)
     except ConversationNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except (OllamaUnavailableError, ModelUnavailableError) as exc:
+    except (OllamaUnavailableError, ModelUnavailableError, VisionProviderUnavailableError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         ) from exc
+    except VisionProviderTimeoutError as exc:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=str(exc)) from exc
     except VisionLanguageModelError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     except Exception as exc:
