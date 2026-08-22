@@ -1,0 +1,31 @@
+{
+  "scenario_id": "living_room",
+  "name": "Sala de estar",
+  "image": "validation_yolo_tests/Screenshot from 2026-08-16 07-54-21.png",
+  "known_objects": ["couch", "potted plant", "vase", "tv"],
+  "questions": [
+    {
+      "id": "q1",
+      "type": "general",
+      "content": "O que estou vendo nesta cena?",
+      "expected_keywords": ["sofá", "sofa", "tv", "televisão", "planta"]
+    },
+    {
+      "id": "q2",
+      "type": "color",
+      "content": "Qual a cor do sofá?",
+      "expected_keywords": ["laranja", "marrom", "bege", "castanho"]
+    },
+    {
+      "id": "q3",
+      "type": "spatial",
+      "content": "Onde está a televisão?",
+      "expected_keywords": ["centro", "meio"]
+    },
+    {
+      "id": "q4",
+      "type": "object_absence",
+      "content": "Tem uma bicicleta na sala?"
+    }
+  ]
+}

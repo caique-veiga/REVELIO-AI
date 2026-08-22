@@ -1,0 +1,3 @@
+A pergunta é sobre posição ou localização de algo na cena. Responda usando
+esquerda, direita, centro, acima e abaixo. Não invente distância física
+(não diga "perto" ou "longe" como medida real).

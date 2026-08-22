@@ -1,4 +1,5 @@
 import dataclasses
+import logging
 import uuid
 
 from sqlalchemy import select
@@ -18,6 +19,8 @@ from app.infrastructure.repositories.conversation_repository import (
 )
 from app.infrastructure.repositories.object_repository import SqlAlchemyObjectRepository
 from app.infrastructure.repositories.scene_repository import SqlAlchemySceneRepository
+
+logger = logging.getLogger(__name__)
 
 
 class SceneService:
@@ -55,35 +58,55 @@ class SceneService:
     def create_scene(self, filename: str, content: bytes) -> Scene:
         scene_id = uuid.uuid4()
 
+        # A imagem é salva no filesystem antes da transação do banco (não há
+        # transação distribuída entre os dois). Se a persistência falhar
+        # depois, o rollback do banco por si só não apaga o arquivo — por
+        # isso a remoção compensatória explícita no except abaixo.
         stored_image = self._image_storage.save(scene_id, filename, content)
 
-        detections = self._detect_and_enrich(content, stored_image.width, stored_image.height)
+        try:
+            detections = self._detect_and_enrich(content, stored_image.width, stored_image.height)
 
-        scene = self._scene_builder.build(
-            image=stored_image, model=self._model_metadata, detections=detections
-        )
-
-        scene_row = self._scene_repository.add(
-            SceneModel(
-                id=scene_id,
-                image_storage_key=stored_image.storage_key,
-                image_filename=stored_image.filename,
-                image_mime_type=stored_image.mime_type,
-                image_width=stored_image.width,
-                image_height=stored_image.height,
-                image_size_bytes=stored_image.size_bytes,
-                image_hash=stored_image.sha256,
+            scene = self._scene_builder.build(
+                image=stored_image, model=self._model_metadata, detections=detections
             )
-        )
 
-        user = self._get_or_create_default_user()
-        conversation_row = self._conversation_repository.add(
-            Conversation(user_id=user.id, scene_id=scene_row.id)
-        )
+            scene_row = self._scene_repository.add(
+                SceneModel(
+                    id=scene_id,
+                    image_storage_key=stored_image.storage_key,
+                    image_filename=stored_image.filename,
+                    image_mime_type=stored_image.mime_type,
+                    image_width=stored_image.width,
+                    image_height=stored_image.height,
+                    image_size_bytes=stored_image.size_bytes,
+                    image_hash=stored_image.sha256,
+                )
+            )
 
-        self._object_repository.add_many(
-            [self._to_detected_object_row(scene_row.id, detection) for detection in detections]
-        )
+            user = self._get_or_create_default_user()
+            conversation_row = self._conversation_repository.add(
+                Conversation(user_id=user.id, scene_id=scene_row.id)
+            )
+
+            self._object_repository.add_many(
+                [self._to_detected_object_row(scene_row.id, detection) for detection in detections]
+            )
+
+            # Commit explícito aqui, antes de retornar ao controller — a
+            # unidade de trabalho (Scene + Conversation + DetectedObjects)
+            # só é considerada concluída quando este commit termina, e só
+            # então a resposta HTTP de sucesso é construída.
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            try:
+                self._image_storage.delete(stored_image.storage_key)
+            except Exception:
+                logger.exception(
+                    "Falha ao remover imagem órfã %s após rollback", stored_image.storage_key
+                )
+            raise
 
         return dataclasses.replace(
             scene, scene_id=scene_row.id, conversation_id=conversation_row.id

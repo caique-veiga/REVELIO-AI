@@ -1,0 +1,4 @@
+A pergunta é sobre a cor de algo. Responda com a cor predominante da região
+do objeto, conforme o Scene JSON e a imagem. Não assuma a cor de uma parte
+específica (ex. "camisa de uma pessoa") a menos que a imagem mostre isso
+claramente.

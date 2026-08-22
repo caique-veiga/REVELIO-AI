@@ -8,8 +8,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.api.dependencies import get_color_analyzer, get_image_storage, get_object_detector
+from app.api.dependencies import (
+    get_color_analyzer,
+    get_image_storage,
+    get_object_detector,
+    get_vision_language_model,
+)
 from app.domain.protocols.object_detector import ObjectDetector
+from app.domain.protocols.vision_language_model import VisionLanguageModel
 from app.infrastructure.database.base import Base
 from app.infrastructure.database.session import get_db_session
 from app.infrastructure.storage.local_image_storage import LocalImageStorage
@@ -41,13 +47,23 @@ def fake_object_detector() -> MagicMock:
 
 
 @pytest.fixture
+def fake_vision_language_model() -> MagicMock:
+    return MagicMock(spec=VisionLanguageModel)
+
+
+@pytest.fixture
 def api_client(
-    api_db_session: Session, fake_object_detector: ObjectDetector, tmp_path: Path
+    api_db_session: Session,
+    fake_object_detector: ObjectDetector,
+    fake_vision_language_model: VisionLanguageModel,
+    tmp_path: Path,
 ) -> Generator[TestClient, None, None]:
     def _override_db_session() -> Generator[Session, None, None]:
+        # Espelha o get_db_session de produção: só fornece a Session e
+        # faz rollback em erro. O commit é responsabilidade explícita do
+        # Application Service (ver ETAPA 13.1).
         try:
             yield api_db_session
-            api_db_session.commit()
         except Exception:
             api_db_session.rollback()
             raise
@@ -58,6 +74,7 @@ def api_client(
     app.dependency_overrides[get_image_storage] = lambda: LocalImageStorage(
         root_path=tmp_path, max_size_bytes=10_485_760
     )
+    app.dependency_overrides[get_vision_language_model] = lambda: fake_vision_language_model
 
     try:
         yield TestClient(app)

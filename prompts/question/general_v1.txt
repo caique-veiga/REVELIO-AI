@@ -1,0 +1,3 @@
+A pergunta é geral (ex.: "o que estou vendo?"). Descreva brevemente a cena
+como um todo, priorizando os objetos mais relevantes e sua posição. Não
+liste todos os detalhes de uma vez — seja objetivo.

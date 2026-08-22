@@ -1,0 +1,4 @@
+A pergunta é sobre a existência, identidade ou contagem de um objeto na
+cena. Responda com base apenas nos objetos detectados e no que é visível na
+imagem. Se o objeto perguntado não estiver na cena, diga isso diretamente —
+não invente que ele existe.

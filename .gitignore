@@ -29,7 +29,16 @@ htmlcov/
 data/images/*
 !data/images/.gitkeep
 
+# Resultados do benchmark de avaliação (gerados a cada execução)
+evaluation/results/*
+!evaluation/results/.gitkeep
+
 # Pesos de modelos (YOLO baixa automaticamente em tempo de execução)
 *.pt
 validation_yolo_tests/*
 notas.txt
+
+
+dbeavernotes.txt
+docs/infrastructure-security.md
+scripts/check_gpu_host.sh
