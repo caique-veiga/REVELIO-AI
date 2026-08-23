@@ -3,6 +3,7 @@ from app.domain.services.question_classifier import QuestionClassifier
 
 _SYSTEM_PROMPT_NAME = "visual_assistant_v1.txt"
 _SCENE_PROMPT_NAME = "scene_description_v1.txt"
+_TOOL_CALLING_PROMPT_NAME = "tool_calling_v1.txt"
 
 
 class PromptComposer:
@@ -30,3 +31,10 @@ class PromptComposer:
         combined = "\n\n".join([system_prompt, scene_prompt, question_prompt])
         prompt_version = f"{question_type.value}_v1"
         return combined, prompt_version
+
+    def build_tool_system_prompt(self) -> str:
+        """System prompt usado no fluxo de tool calling (Gemini): não
+        concatena scene/question prompts, já que o Gemini decide sozinho se
+        responde direto ou chama uma tool.
+        """
+        return self._prompt_loader.load("system", _TOOL_CALLING_PROMPT_NAME)

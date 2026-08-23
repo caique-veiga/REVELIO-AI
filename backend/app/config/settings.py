@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     yolo_model: str = "yolov8n.pt"
     yolo_confidence_threshold: float = 0.5
 
+    skip_yolo_for_gemini: bool = True
+
+    face_model_name: str = "buffalo_l"
+    face_detection_size: int = 640
+    face_match_threshold: float = 0.5
+
 
 @lru_cache
 def get_settings() -> Settings:

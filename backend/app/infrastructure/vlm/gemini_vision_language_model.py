@@ -2,10 +2,12 @@ import base64
 import json
 import logging
 import time
+from typing import cast
 
 import httpx
 
 from app.domain.entities.conversation_message import ConversationMessage
+from app.domain.entities.tool_call import ToolCall, ToolCallResponse, ToolDefinition
 from app.domain.entities.vlm_response import VLMResponse
 from app.domain.protocols.vision_language_model import (
     EmptyModelResponseError,
@@ -77,17 +79,107 @@ class GeminiVisionLanguageModel:
         conversation_history: list[ConversationMessage],
         question: str,
     ) -> VLMResponse:
+        image_b64 = self._prepare_image(image)
+        scene_context = json.dumps(scene_json, ensure_ascii=False) if scene_json else None
+        # Sem Scene JSON (YOLO desabilitado para o Gemini): a imagem sozinha
+        # já basta — ver PROMPT "Gemini Fallback Sem JSON YOLO".
+        question_text = (
+            f"Scene JSON:\n{scene_context}\n\nPergunta: {question}" if scene_context else question
+        )
+
+        contents = self._build_contents(conversation_history, question_text, image_b64)
+        payload: dict[str, object] = {
+            "system_instruction": {"parts": [{"text": system_prompt}]},
+            "contents": contents,
+        }
+
+        data, duration_ms = self._send(payload)
+        answer, _tool_call = self._parse_parts(
+            data
+        )  # ask() nunca envia tools, então não deveria vir
+
+        if not (answer or "").strip():
+            logger.error(
+                "gemini returned empty content model=%s duration_ms=%.1f",
+                self._model,
+                duration_ms,
+            )
+            raise EmptyModelResponseError(f"Gemini retornou content vazio (model={self._model})")
+        assert answer is not None
+
+        usage = cast(dict[str, object], data.get("usageMetadata", {}))
+        logger.info(
+            "gemini request succeeded model=%s duration_ms=%.1f prompt_tokens=%s output_tokens=%s",
+            self._model,
+            duration_ms,
+            usage.get("promptTokenCount"),
+            usage.get("candidatesTokenCount"),
+        )
+        return VLMResponse(text=answer, model=self._model, duration_ms=duration_ms)
+
+    def ask_with_tools(
+        self,
+        *,
+        image: bytes,
+        system_prompt: str,
+        conversation_history: list[ConversationMessage],
+        question: str,
+        tools: list[ToolDefinition],
+    ) -> ToolCallResponse:
+        image_b64 = self._prepare_image(image)
+        contents = self._build_contents(conversation_history, question, image_b64)
+        payload: dict[str, object] = {
+            "system_instruction": {"parts": [{"text": system_prompt}]},
+            "contents": contents,
+            "tools": [
+                {
+                    "function_declarations": [
+                        {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "parameters": tool.parameters,
+                        }
+                        for tool in tools
+                    ]
+                }
+            ],
+        }
+
+        data, duration_ms = self._send(payload)
+        answer, tool_call = self._parse_parts(data)
+
+        if tool_call is None and not (answer or "").strip():
+            logger.error(
+                "gemini (tools) returned empty content model=%s duration_ms=%.1f",
+                self._model,
+                duration_ms,
+            )
+            raise EmptyModelResponseError(f"Gemini retornou content vazio (model={self._model})")
+
+        logger.info(
+            "gemini (tools) request succeeded model=%s duration_ms=%.1f tool_call=%s",
+            self._model,
+            duration_ms,
+            tool_call.name if tool_call else None,
+        )
+        return ToolCallResponse(
+            text=answer, tool_call=tool_call, model=self._model, duration_ms=duration_ms
+        )
+
+    def _prepare_image(self, image: bytes) -> str:
         image_to_send = image
-        original_size = len(image)
         if self._image_enable_optimization:
             image_to_send = optimize_image(
                 image,
                 max_dimension=self._image_max_dimension,
                 jpeg_quality=self._image_jpeg_quality,
             )
-        image_b64 = base64.b64encode(image_to_send).decode("ascii")
-        scene_context = json.dumps(scene_json, ensure_ascii=False)
+        return base64.b64encode(image_to_send).decode("ascii")
 
+    @staticmethod
+    def _build_contents(
+        conversation_history: list[ConversationMessage], question_text: str, image_b64: str
+    ) -> list[dict[str, object]]:
         contents: list[dict[str, object]] = [
             {"role": _ROLE_MAP.get(entry.role.value, "user"), "parts": [{"text": entry.content}]}
             for entry in conversation_history
@@ -96,23 +188,15 @@ class GeminiVisionLanguageModel:
             {
                 "role": "user",
                 "parts": [
-                    {"text": f"Scene JSON:\n{scene_context}\n\nPergunta: {question}"},
+                    {"text": question_text},
                     {"inline_data": {"mime_type": "image/jpeg", "data": image_b64}},
                 ],
             }
         )
+        return contents
 
-        payload = {
-            "system_instruction": {"parts": [{"text": system_prompt}]},
-            "contents": contents,
-        }
-
-        logger.info(
-            "gemini request started model=%s original_bytes=%d sent_bytes=%d",
-            self._model,
-            original_size,
-            len(image_to_send),
-        )
+    def _send(self, payload: dict[str, object]) -> tuple[dict[str, object], float]:
+        logger.info("gemini request started model=%s", self._model)
         started = time.monotonic()
         try:
             response = self._client.post(
@@ -147,26 +231,24 @@ class GeminiVisionLanguageModel:
                 f"Gemini retornou HTTP {response.status_code}: {response.text}"
             )
 
-        data = response.json()
+        result: dict[str, object] = response.json()
+        return result, duration_ms
+
+    @staticmethod
+    def _parse_parts(data: dict[str, object]) -> tuple[str | None, ToolCall | None]:
         candidates = data.get("candidates") or []
-        parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
-        answer = "".join(part.get("text", "") for part in parts)
-        usage = data.get("usageMetadata", {})
+        parts = candidates[0].get("content", {}).get("parts", []) if candidates else []  # type: ignore[index]
 
-        if not answer.strip():
-            logger.error(
-                "gemini returned empty content model=%s finish_reason=%s duration_ms=%.1f",
-                self._model,
-                candidates[0].get("finishReason") if candidates else None,
-                duration_ms,
-            )
-            raise EmptyModelResponseError(f"Gemini retornou content vazio (model={self._model})")
+        tool_call: ToolCall | None = None
+        text_chunks: list[str] = []
+        for part in parts:
+            if "functionCall" in part:
+                function_call = part["functionCall"]
+                tool_call = ToolCall(
+                    name=function_call["name"], arguments=function_call.get("args", {})
+                )
+            elif "text" in part:
+                text_chunks.append(part["text"])
 
-        logger.info(
-            "gemini request succeeded model=%s duration_ms=%.1f prompt_tokens=%s output_tokens=%s",
-            self._model,
-            duration_ms,
-            usage.get("promptTokenCount"),
-            usage.get("candidatesTokenCount"),
-        )
-        return VLMResponse(text=answer, model=self._model, duration_ms=duration_ms)
+        text = "".join(text_chunks) if text_chunks else None
+        return text, tool_call
