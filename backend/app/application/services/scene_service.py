@@ -43,6 +43,7 @@ class SceneService:
         color_analyzer: ColorAnalyzer,
         scene_builder: SceneBuilder,
         model_metadata: ModelMetadata,
+        skip_yolo_pipeline: bool = False,
     ) -> None:
         self._session = session
         self._image_storage = image_storage
@@ -51,6 +52,7 @@ class SceneService:
         self._color_analyzer = color_analyzer
         self._scene_builder = scene_builder
         self._model_metadata = model_metadata
+        self._skip_yolo_pipeline = skip_yolo_pipeline
         self._scene_repository = SqlAlchemySceneRepository(session)
         self._conversation_repository = SqlAlchemyConversationRepository(session)
         self._object_repository = SqlAlchemyObjectRepository(session)
@@ -65,7 +67,13 @@ class SceneService:
         stored_image = self._image_storage.save(scene_id, filename, content)
 
         try:
-            detections = self._detect_and_enrich(content, stored_image.width, stored_image.height)
+            if self._skip_yolo_pipeline:
+                logger.info("Skipping YOLO (Gemini fallback) scene_id=%s", scene_id)
+                detections: list[Detection] = []
+            else:
+                detections = self._detect_and_enrich(
+                    content, stored_image.width, stored_image.height
+                )
 
             scene = self._scene_builder.build(
                 image=stored_image, model=self._model_metadata, detections=detections
@@ -89,9 +97,13 @@ class SceneService:
                 Conversation(user_id=user.id, scene_id=scene_row.id)
             )
 
-            self._object_repository.add_many(
-                [self._to_detected_object_row(scene_row.id, detection) for detection in detections]
-            )
+            if detections:
+                self._object_repository.add_many(
+                    [
+                        self._to_detected_object_row(scene_row.id, detection)
+                        for detection in detections
+                    ]
+                )
 
             # Commit explícito aqui, antes de retornar ao controller — a
             # unidade de trabalho (Scene + Conversation + DetectedObjects)

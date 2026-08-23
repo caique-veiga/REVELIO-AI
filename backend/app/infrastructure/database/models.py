@@ -2,14 +2,18 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
+    Boolean,
     DateTime,
     Enum,
     Float,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -92,6 +96,32 @@ class DetectedObject(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     color_confidence: Mapped[float] = mapped_column(Float)
 
     scene: Mapped["SceneModel"] = relationship(back_populates="detected_objects")
+
+
+class Person(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "persons"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    relationship_label: Mapped[str] = mapped_column("relationship", String(255))
+
+    photos: Mapped[list["PersonPhoto"]] = relationship(
+        back_populates="person", cascade="all, delete-orphan"
+    )
+
+
+class PersonPhoto(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "person_photos"
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("persons.id"), index=True)
+    photo_storage_key: Mapped[str] = mapped_column(String(512))
+    photo_embedding: Mapped[bytes] = mapped_column(LargeBinary)
+    face_roi: Mapped[dict[str, int]] = mapped_column(JSON)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+
+    person: Mapped["Person"] = relationship(back_populates="photos")
 
 
 class Message(UUIDPrimaryKeyMixin, Base):

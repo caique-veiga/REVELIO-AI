@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.domain.entities.tool_call import ToolCall, ToolCallResponse
 from app.domain.entities.vlm_response import VLMResponse
 from app.domain.protocols.vision_language_model import (
     OllamaUnavailableError,
@@ -9,6 +10,7 @@ from app.domain.protocols.vision_language_model import (
     VisionProviderUnavailableError,
 )
 from app.infrastructure.vlm.fallback_vision_language_model import FallbackVisionLanguageModel
+from app.infrastructure.vlm.gemini_vision_language_model import GeminiVisionLanguageModel
 
 
 def _ask(vlm: FallbackVisionLanguageModel) -> VLMResponse:
@@ -64,3 +66,24 @@ def test_health_check_delegates_to_fallback() -> None:
 
     fallback.health_check.assert_called_once()
     primary.health_check.assert_not_called()
+
+
+def test_ask_with_tools_always_delegates_to_fallback() -> None:
+    primary = MagicMock(spec=VisionLanguageModel)
+    fallback = MagicMock(spec=GeminiVisionLanguageModel)
+    fallback.ask_with_tools.return_value = ToolCallResponse(
+        text=None,
+        tool_call=ToolCall(name="identify_persons", arguments={}),
+        model="gemini-3.5-flash-lite",
+        duration_ms=15.0,
+    )
+
+    vlm = FallbackVisionLanguageModel(primary=primary, fallback=fallback)
+    response = vlm.ask_with_tools(
+        image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[]
+    )
+
+    assert response.tool_call is not None
+    assert response.tool_call.name == "identify_persons"
+    fallback.ask_with_tools.assert_called_once()
+    primary.ask.assert_not_called()

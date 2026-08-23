@@ -12,6 +12,7 @@ from app.api.dependencies import (
     get_color_analyzer,
     get_image_storage,
     get_object_detector,
+    get_skip_yolo_pipeline,
     get_vision_language_model,
 )
 from app.domain.protocols.object_detector import ObjectDetector
@@ -75,6 +76,10 @@ def api_client(
         root_path=tmp_path, max_size_bytes=10_485_760
     )
     app.dependency_overrides[get_vision_language_model] = lambda: fake_vision_language_model
+    # Pinado explicitamente: sem isso, o valor real viria do `.env` do
+    # desenvolvedor (OLLAMA_ENABLED=false localmente já desliga o YOLO), e os
+    # testes deste arquivo passariam a depender de config local não commitada.
+    app.dependency_overrides[get_skip_yolo_pipeline] = lambda: False
 
     try:
         yield TestClient(app)

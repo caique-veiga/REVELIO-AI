@@ -27,6 +27,7 @@ from app.api.dependencies import (
     get_color_analyzer,
     get_image_storage,
     get_object_detector,
+    get_skip_yolo_pipeline,
     get_vision_language_model,
 )
 from app.domain.entities.bounding_box import BoundingBox
@@ -84,6 +85,7 @@ def per_request_session(tmp_path: Path) -> Generator[ClientAndEngine, None, None
     app.dependency_overrides[get_vision_language_model] = lambda: MagicMock(
         spec=VisionLanguageModel
     )
+    app.dependency_overrides[get_skip_yolo_pipeline] = lambda: False
 
     try:
         yield ClientAndEngine(client=TestClient(app), engine=engine)

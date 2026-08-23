@@ -20,6 +20,7 @@ dependencies = [
     "torchvision>=0.15",
     "ultralytics>=8.3",
     "httpx>=0.27",
+    "insightface>=1.0.1",
 ]
 
 [dependency-groups]

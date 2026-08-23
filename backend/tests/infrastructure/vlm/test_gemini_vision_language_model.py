@@ -6,6 +6,7 @@ import pytest
 
 from app.domain.entities.conversation_message import ConversationMessage
 from app.domain.entities.message_role import MessageRole
+from app.domain.entities.tool_call import ToolDefinition
 from app.domain.protocols.vision_language_model import (
     EmptyModelResponseError,
     VisionLanguageModelError,
@@ -13,6 +14,16 @@ from app.domain.protocols.vision_language_model import (
     VisionProviderUnavailableError,
 )
 from app.infrastructure.vlm.gemini_vision_language_model import GeminiVisionLanguageModel
+
+_A_TOOL = ToolDefinition(
+    name="register_person",
+    description="Cadastra uma pessoa",
+    parameters={
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    },
+)
 
 BASE_URL = "https://generativelanguage.googleapis.com"
 MODEL = "gemini-2.5-flash-lite"
@@ -200,3 +211,86 @@ def test_ask_raises_generic_error_on_unexpected_status() -> None:
     vlm = make_vlm(handler, image_enable_optimization=False)
     with pytest.raises(VisionLanguageModelError):
         vlm.ask(image=b"x", scene_json={}, system_prompt="s", conversation_history=[], question="q")
+
+
+def test_ask_with_tools_sends_function_declarations() -> None:
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return _generate_response("olá")
+
+    vlm = make_vlm(handler, image_enable_optimization=False)
+    vlm.ask_with_tools(
+        image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[_A_TOOL]
+    )
+
+    tools_payload = captured["tools"]
+    assert tools_payload == [
+        {
+            "function_declarations": [
+                {
+                    "name": "register_person",
+                    "description": "Cadastra uma pessoa",
+                    "parameters": _A_TOOL.parameters,
+                }
+            ]
+        }
+    ]
+
+
+def test_ask_with_tools_returns_direct_text_when_no_function_call() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _generate_response("vejo uma cadeira")
+
+    vlm = make_vlm(handler, image_enable_optimization=False)
+    response = vlm.ask_with_tools(
+        image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[_A_TOOL]
+    )
+
+    assert response.text == "vejo uma cadeira"
+    assert response.tool_call is None
+    assert response.model == MODEL
+
+
+def test_ask_with_tools_returns_tool_call_when_model_calls_function() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {
+                                    "functionCall": {
+                                        "name": "register_person",
+                                        "args": {"name": "Maria", "relationship": "minha irmã"},
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+        )
+
+    vlm = make_vlm(handler, image_enable_optimization=False)
+    response = vlm.ask_with_tools(
+        image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[_A_TOOL]
+    )
+
+    assert response.tool_call is not None
+    assert response.tool_call.name == "register_person"
+    assert response.tool_call.arguments == {"name": "Maria", "relationship": "minha irmã"}
+
+
+def test_ask_with_tools_raises_empty_model_response_error_when_nothing_returned() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"candidates": []})
+
+    vlm = make_vlm(handler, image_enable_optimization=False)
+    with pytest.raises(EmptyModelResponseError):
+        vlm.ask_with_tools(
+            image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[_A_TOOL]
+        )
