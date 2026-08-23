@@ -26,10 +26,10 @@ def test_ask_against_real_ollama_instance(jpeg_bytes: bytes) -> None:
 
     response = vlm.ask(
         image=jpeg_bytes,
-        scene_json={"scene_id": "integration-test", "objects": []},
         system_prompt="Você é um assistente visual objetivo e conciso.",
         conversation_history=[],
         question="Descreva brevemente o que você vê.",
+        tools=[],
     )
 
     assert response.text

@@ -32,11 +32,6 @@ class Settings(BaseSettings):
     image_storage_path: str = "data/images"
     max_image_size_bytes: int = 10_485_760
 
-    yolo_model: str = "yolov8n.pt"
-    yolo_confidence_threshold: float = 0.5
-
-    skip_yolo_for_gemini: bool = True
-
     face_model_name: str = "buffalo_l"
     face_detection_size: int = 640
     face_match_threshold: float = 0.5

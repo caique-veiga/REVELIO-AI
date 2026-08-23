@@ -1,7 +1,7 @@
 from typing import Protocol
 
 from app.domain.entities.conversation_message import ConversationMessage
-from app.domain.entities.vlm_response import VLMResponse
+from app.domain.entities.tool_call import ToolCallResponse, ToolDefinition
 
 
 class VisionLanguageModelError(Exception):
@@ -17,7 +17,7 @@ class ModelUnavailableError(VisionLanguageModelError):
 
 
 class EmptyModelResponseError(VisionLanguageModelError):
-    """O provider respondeu com sucesso, mas não veio nenhum texto de resposta.
+    """O provider respondeu com sucesso, mas não veio nem texto nem tool call.
 
     Causa observada no Ollama (ETAPA 13.1): modelos com "thinking" (ex.
     qwen3.5) podem consumir todo o orçamento de geração (`num_ctx`)
@@ -40,9 +40,9 @@ class VisionProviderTimeoutError(VisionLanguageModelError):
 
 class VisionLanguageModel(Protocol):
     def health_check(self) -> None:
-        """Verifica se o Ollama está acessível e se o modelo configurado existe.
+        """Verifica se o provider está acessível e se o modelo configurado existe.
 
-        Levanta OllamaUnavailableError ou ModelUnavailableError quando algo não
+        Levanta uma subclasse de VisionLanguageModelError quando algo não
         está pronto; não retorna nada quando está tudo certo.
         """
         ...
@@ -51,8 +51,14 @@ class VisionLanguageModel(Protocol):
         self,
         *,
         image: bytes,
-        scene_json: dict[str, object],
         system_prompt: str,
         conversation_history: list[ConversationMessage],
         question: str,
-    ) -> VLMResponse: ...
+        tools: list[ToolDefinition],
+    ) -> ToolCallResponse:
+        """Manda imagem + histórico + pergunta, com as tools disponíveis
+        (register_person, identify_persons). O modelo decide sozinho se
+        responde com texto direto ou chama uma tool — nunca recebe Scene
+        JSON pré-processado (YOLO removido, ver PROMPT "Unificar
+        Comportamento Gemini/Ollama")."""
+        ...

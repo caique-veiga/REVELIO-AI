@@ -12,26 +12,13 @@ class AskQuestionRequest(BaseModel):
     content: str
 
 
-class ReferencedObjectSchema(BaseModel):
-    object_id: uuid.UUID
-    class_name: str
-
-
 class AskQuestionResponse(BaseModel):
     answer: str
     scene_id: uuid.UUID
-    referenced_objects: list[ReferencedObjectSchema]
 
     @classmethod
     def from_domain(cls, conversation_answer: ConversationAnswer) -> "AskQuestionResponse":
-        return cls(
-            answer=conversation_answer.answer,
-            scene_id=conversation_answer.scene_id,
-            referenced_objects=[
-                ReferencedObjectSchema(object_id=ref.object_id, class_name=ref.class_name)
-                for ref in conversation_answer.referenced_objects
-            ],
-        )
+        return cls(answer=conversation_answer.answer, scene_id=conversation_answer.scene_id)
 
 
 class MessageSchema(BaseModel):

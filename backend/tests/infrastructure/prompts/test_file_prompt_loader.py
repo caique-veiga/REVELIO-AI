@@ -46,7 +46,4 @@ def test_load_real_project_prompts() -> None:
     project_root = Path(__file__).resolve().parents[4]
     loader = FilePromptLoader(project_root / "prompts")
 
-    assert loader.load("system", "visual_assistant_v1.txt")
-    assert loader.load("scene", "scene_description_v1.txt")
-    for name in ("general", "spatial", "color", "object", "uncertainty"):
-        assert loader.load("question", f"{name}_v1.txt")
+    assert loader.load("system", "tool_calling_v1.txt")

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.infrastructure.database.base import Base
-from app.infrastructure.database.models import DetectedObject, SceneModel, User
+from app.infrastructure.database.models import SceneModel, User
 
 
 @pytest.fixture
@@ -65,32 +65,5 @@ def scene_factory() -> Callable[..., SceneModel]:
         }
         defaults.update(overrides)
         return SceneModel(**defaults)
-
-    return _make
-
-
-@pytest.fixture
-def detected_object_factory() -> Callable[..., DetectedObject]:
-    def _make(scene_id: uuid.UUID, **overrides: object) -> DetectedObject:
-        defaults: dict[str, object] = {
-            "scene_id": scene_id,
-            "class_id": 0,
-            "class_name": "person",
-            "confidence": 0.98,
-            "bbox_x1": 100,
-            "bbox_y1": 200,
-            "bbox_x2": 500,
-            "bbox_y2": 900,
-            "position_horizontal": "center",
-            "position_vertical": "middle",
-            "position_region": "front-center",
-            "color_name": "blue",
-            "color_r": 20,
-            "color_g": 80,
-            "color_b": 180,
-            "color_confidence": 0.82,
-        }
-        defaults.update(overrides)
-        return DetectedObject(**defaults)
 
     return _make

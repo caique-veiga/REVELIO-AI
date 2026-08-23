@@ -90,20 +90,22 @@ def test_ask_sends_system_instruction_history_image_and_question() -> None:
     vlm = make_vlm(handler, image_enable_optimization=False)
     response = vlm.ask(
         image=b"fake-jpeg-bytes",
-        scene_json={"scene_id": "abc", "objects": []},
         system_prompt="Você é um assistente visual.",
         conversation_history=[
             ConversationMessage(role=MessageRole.USER, content="oi"),
             ConversationMessage(role=MessageRole.ASSISTANT, content="olá"),
         ],
         question="o que tem na minha frente?",
+        tools=[],
     )
 
     assert response.text == "há uma cadeira à sua frente"
+    assert response.tool_call is None
     assert response.model == MODEL
     assert response.duration_ms >= 0
 
     assert captured["system_instruction"] == {"parts": [{"text": "Você é um assistente visual."}]}
+    assert "tools" not in captured
     contents = captured["contents"]
     assert isinstance(contents, list)
     assert contents[0] == {"role": "user", "parts": [{"text": "oi"}]}
@@ -111,8 +113,7 @@ def test_ask_sends_system_instruction_history_image_and_question() -> None:
     last_turn = contents[-1]
     assert last_turn["role"] == "user"
     text_part, image_part = last_turn["parts"]
-    assert "o que tem na minha frente?" in text_part["text"]
-    assert "abc" in text_part["text"]
+    assert text_part["text"] == "o que tem na minha frente?"
     assert image_part["inline_data"]["mime_type"] == "image/jpeg"
 
 
@@ -134,10 +135,10 @@ def test_ask_optimizes_image_by_default() -> None:
     vlm = make_vlm(handler, image_max_dimension=768, image_jpeg_quality=85)
     vlm.ask(
         image=large_image,
-        scene_json={},
         system_prompt="s",
         conversation_history=[],
         question="q",
+        tools=[],
     )
 
     contents = captured["contents"]
@@ -156,7 +157,7 @@ def test_ask_raises_empty_model_response_error_when_no_candidates() -> None:
 
     vlm = make_vlm(handler, image_enable_optimization=False)
     with pytest.raises(EmptyModelResponseError):
-        vlm.ask(image=b"x", scene_json={}, system_prompt="s", conversation_history=[], question="q")
+        vlm.ask(image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[])
 
 
 def test_ask_raises_visionprovider_unavailable_on_429() -> None:
@@ -165,7 +166,7 @@ def test_ask_raises_visionprovider_unavailable_on_429() -> None:
 
     vlm = make_vlm(handler, image_enable_optimization=False)
     with pytest.raises(VisionProviderUnavailableError):
-        vlm.ask(image=b"x", scene_json={}, system_prompt="s", conversation_history=[], question="q")
+        vlm.ask(image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[])
 
 
 def test_ask_raises_visionprovider_unavailable_on_401() -> None:
@@ -174,7 +175,7 @@ def test_ask_raises_visionprovider_unavailable_on_401() -> None:
 
     vlm = make_vlm(handler, image_enable_optimization=False)
     with pytest.raises(VisionProviderUnavailableError):
-        vlm.ask(image=b"x", scene_json={}, system_prompt="s", conversation_history=[], question="q")
+        vlm.ask(image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[])
 
 
 def test_ask_raises_visionprovider_unavailable_on_500() -> None:
@@ -183,7 +184,7 @@ def test_ask_raises_visionprovider_unavailable_on_500() -> None:
 
     vlm = make_vlm(handler, image_enable_optimization=False)
     with pytest.raises(VisionProviderUnavailableError):
-        vlm.ask(image=b"x", scene_json={}, system_prompt="s", conversation_history=[], question="q")
+        vlm.ask(image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[])
 
 
 def test_ask_raises_visionprovider_timeout_on_timeout() -> None:
@@ -192,7 +193,7 @@ def test_ask_raises_visionprovider_timeout_on_timeout() -> None:
 
     vlm = make_vlm(handler, image_enable_optimization=False)
     with pytest.raises(VisionProviderTimeoutError):
-        vlm.ask(image=b"x", scene_json={}, system_prompt="s", conversation_history=[], question="q")
+        vlm.ask(image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[])
 
 
 def test_ask_raises_visionprovider_unavailable_on_connection_error() -> None:
@@ -201,7 +202,7 @@ def test_ask_raises_visionprovider_unavailable_on_connection_error() -> None:
 
     vlm = make_vlm(handler, image_enable_optimization=False)
     with pytest.raises(VisionProviderUnavailableError):
-        vlm.ask(image=b"x", scene_json={}, system_prompt="s", conversation_history=[], question="q")
+        vlm.ask(image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[])
 
 
 def test_ask_raises_generic_error_on_unexpected_status() -> None:
@@ -210,10 +211,10 @@ def test_ask_raises_generic_error_on_unexpected_status() -> None:
 
     vlm = make_vlm(handler, image_enable_optimization=False)
     with pytest.raises(VisionLanguageModelError):
-        vlm.ask(image=b"x", scene_json={}, system_prompt="s", conversation_history=[], question="q")
+        vlm.ask(image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[])
 
 
-def test_ask_with_tools_sends_function_declarations() -> None:
+def test_ask_sends_function_declarations_when_tools_given() -> None:
     captured: dict[str, object] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -221,9 +222,7 @@ def test_ask_with_tools_sends_function_declarations() -> None:
         return _generate_response("olá")
 
     vlm = make_vlm(handler, image_enable_optimization=False)
-    vlm.ask_with_tools(
-        image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[_A_TOOL]
-    )
+    vlm.ask(image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[_A_TOOL])
 
     tools_payload = captured["tools"]
     assert tools_payload == [
@@ -239,12 +238,12 @@ def test_ask_with_tools_sends_function_declarations() -> None:
     ]
 
 
-def test_ask_with_tools_returns_direct_text_when_no_function_call() -> None:
+def test_ask_returns_direct_text_when_no_function_call() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return _generate_response("vejo uma cadeira")
 
     vlm = make_vlm(handler, image_enable_optimization=False)
-    response = vlm.ask_with_tools(
+    response = vlm.ask(
         image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[_A_TOOL]
     )
 
@@ -253,7 +252,7 @@ def test_ask_with_tools_returns_direct_text_when_no_function_call() -> None:
     assert response.model == MODEL
 
 
-def test_ask_with_tools_returns_tool_call_when_model_calls_function() -> None:
+def test_ask_returns_tool_call_when_model_calls_function() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
@@ -276,7 +275,7 @@ def test_ask_with_tools_returns_tool_call_when_model_calls_function() -> None:
         )
 
     vlm = make_vlm(handler, image_enable_optimization=False)
-    response = vlm.ask_with_tools(
+    response = vlm.ask(
         image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[_A_TOOL]
     )
 
@@ -285,12 +284,12 @@ def test_ask_with_tools_returns_tool_call_when_model_calls_function() -> None:
     assert response.tool_call.arguments == {"name": "Maria", "relationship": "minha irmã"}
 
 
-def test_ask_with_tools_raises_empty_model_response_error_when_nothing_returned() -> None:
+def test_ask_raises_empty_model_response_error_when_nothing_returned() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"candidates": []})
 
     vlm = make_vlm(handler, image_enable_optimization=False)
     with pytest.raises(EmptyModelResponseError):
-        vlm.ask_with_tools(
+        vlm.ask(
             image=b"x", system_prompt="s", conversation_history=[], question="q", tools=[_A_TOOL]
         )

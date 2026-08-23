@@ -9,24 +9,26 @@ O objetivo é construir um protótipo funcional de um assistente visual para pes
 O sistema recebe uma fotografia capturada por um aplicativo Android e:
 
 1. armazena a imagem no computador que possui a GPU;
-2. utiliza um detector de objetos YOLO pré-treinado no dataset COCO;
-3. extrai:
-   - classe do objeto;
-   - confiança;
-   - bounding box;
-   - posição aproximada na imagem;
-4. utiliza OpenCV para estimar a cor predominante dos objetos;
-5. constrói um Scene JSON estruturado;
-6. persiste os dados no PostgreSQL;
-7. permite ao usuário fazer perguntas sobre a cena;
-8. envia para uma VLM através do Ollama:
+2. persiste Scene + Conversation no PostgreSQL (sem nenhum pré-processamento de visão
+   computacional sobre a imagem);
+3. permite ao usuário fazer perguntas sobre a cena;
+4. envia para uma VLM (Ollama/Qwen, com fallback automático para Gemini Flash-Lite):
    - imagem;
-   - Scene JSON;
    - histórico da conversa;
    - pergunta atual;
-9. recebe uma resposta textual;
-10. salva a pergunta e a resposta;
-11. o aplicativo Android lê a resposta utilizando Text-to-Speech.
+   - as tools de reconhecimento de pessoas (`register_person`, `identify_persons`);
+5. a VLM decide sozinha se responde com texto direto ou chama uma tool — se chamar
+   `register_person`/`identify_persons`, o backend roda reconhecimento facial (InsightFace) sob
+   demanda sobre a imagem já enviada;
+6. recebe uma resposta textual;
+7. salva a pergunta e a resposta;
+8. o aplicativo Android lê a resposta utilizando Text-to-Speech.
+
+IMPORTANTE (mudança de arquitetura, PROMPT "Unificar Comportamento Gemini/Ollama"): a primeira
+versão deste documento descrevia um pipeline YOLO (COCO) + OpenCV + Scene JSON estruturado
+enviado à VLM. Esse pipeline foi removido por completo — a VLM analisa a imagem diretamente, sem
+detecção de objetos pré-processada. Reconhecimento de pessoas (cadastro/identificação) é a única
+capacidade estruturada que existe hoje, via tool calling e InsightFace.
 
 IMPORTANTE:
 
@@ -70,16 +72,19 @@ Backend:
 
 Computer Vision:
 
-- YOLO pré-treinado em COCO
-- OpenCV
+- InsightFace (modelo `buffalo_l`, CPU/ONNX) — detecção facial + embedding para reconhecimento
+  de pessoas
 - NumPy
 - Pillow quando necessário
 
 Generative AI:
 
-- Ollama
-- Qwen3.5 4B
-- VLM multimodal compatível com Ollama
+- Ollama + Qwen3.5 4B (tier 1, local) — VLM multimodal compatível com Ollama, com suporte a tool
+  calling
+- Gemini Flash-Lite (tier 2, API) — fallback automático quando o Ollama falha ou está
+  desabilitado; também suporta tool calling
+- Ambos os tiers recebem exatamente a mesma coisa (imagem + histórico + pergunta + tools:
+  `register_person`, `identify_persons`) e decidem sozinhos como responder
 
 Mobile:
 
@@ -121,14 +126,6 @@ Scene Service
     |
     +--> Image Storage
     |
-    +--> YOLO Detector
-    |
-    +--> Position Analyzer
-    |
-    +--> Color Analyzer
-    |
-    +--> Scene Builder
-    |
     v
 PostgreSQL
 
@@ -142,12 +139,15 @@ FastAPI
     v
 Conversation Service
     |
-    +--> Scene JSON
     +--> Conversation History
     +--> Image
+    +--> Tools (register_person, identify_persons)
     |
     v
-Ollama / Qwen3.5 4B
+Ollama / Qwen3.5 4B  --(fallback)-->  Gemini Flash-Lite
+    |
+    v
+texto direto  OU  tool call --> Person Recognition Service --> InsightFace
     |
     v
 Answer
@@ -205,9 +205,9 @@ cria:
 
 Não colocar lógica de negócio em controllers.
 
-Não colocar YOLO diretamente nos endpoints.
+Não colocar reconhecimento facial diretamente nos endpoints.
 
-Não colocar chamadas ao Ollama diretamente nos controllers.
+Não colocar chamadas ao Ollama/Gemini diretamente nos controllers.
 
 Não colocar SQLAlchemy diretamente nos controllers.
 
@@ -227,21 +227,23 @@ SceneController
     ->
 SceneService
     ->
-ObjectDetector
+ImageStorage
     ->
-YOLODetector
-
-SceneService
-    ->
-ColorAnalyzer
-    ->
-OpenCVColorAnalyzer
+LocalImageStorage
 
 ConversationService
     ->
 VisionLanguageModel
     ->
-OllamaVLM
+FallbackVisionLanguageModel (Ollama -> Gemini)
+
+ConversationService
+    ->
+PersonRecognitionService
+    ->
+FaceEncoder
+    ->
+InsightFaceEncoder
 
 ConversationService
     ->
@@ -303,8 +305,6 @@ android/
 
 prompts/
     system/
-    scene/
-    question/
 
 scenarios/
 
@@ -323,38 +323,38 @@ A estrutura pode ser adaptada se existir uma justificativa técnica melhor.
 
 ---
 
-# 8. DETECTOR
+# 8. DETECÇÃO FACIAL (RECONHECIMENTO DE PESSOAS)
 
-Utilizar YOLO pré-treinado para detecção no COCO.
-
-IMPORTANTE:
-
-COCO possui 80 classes de detecção.
-
-Não assumir que COCO possui 1000 classes.
-
-Não treinar o modelo nesta primeira versão.
-
-A finalidade inicial é inferência.
+Não há mais detector de objetos genérico (YOLO/COCO removido — ver seção 1). A única detecção
+estruturada que existe é facial, via InsightFace (`FaceEncoder` protocol / `InsightFaceEncoder`),
+acionada sob demanda quando a VLM chama `register_person` ou `identify_persons`.
 
 O detector deve retornar uma estrutura interna independente da biblioteca utilizada.
 
-Não permitir que objetos específicos da biblioteca YOLO vazem para o domínio.
+Não permitir que objetos específicos da biblioteca InsightFace vazem para o domínio.
 
 Exemplo conceitual:
 
-Detection:
-    object_id
-    class_name
-    class_id
-    confidence
-    bounding_box
+FaceEncoding:
+    bbox
+    embedding
+
+Não usar nenhum filtro de classe de objeto (ex. "person" do YOLO) antes do reconhecimento facial
+— na prática, isso gerava falsos negativos em selfies reais. Quem decide se há um rosto na imagem
+é exclusivamente o `FaceEncoder`; aceitar um falso-positivo ocasional (ex. registrar um animal) é
+a troca aceita em favor de nunca bloquear uma pessoa real.
+
+Cadastro (`register_person`) exige exatamente um rosto na foto. Identificação
+(`identify_persons`) compara cada rosto encontrado contra os cadastros do usuário por similaridade
+de cosseno (`FaceMatcher`, limiar configurável).
 
 ---
 
 # 9. POSIÇÃO
 
-Calcular posição aproximada com base no centro da bounding box.
+Usada hoje só para relatar a posição horizontal de um rosto identificado (ex. "Maria à
+esquerda"), via `PositionAnalyzer` (domain service, sem dependência externa). Calcular posição
+aproximada com base no centro da bounding box.
 
 Horizontal:
 
@@ -388,73 +388,16 @@ Não utilizar "perto" ou "longe" como distância real nesta versão.
 
 # 10. COR
 
-Utilizar OpenCV.
-
-A cor deve ser considerada:
-
-"cor predominante da região detectada"
-
-e não necessariamente a cor de uma parte semântica específica.
-
-Por exemplo:
-
-person
-    -> dominant_color
-
-NÃO assumir automaticamente:
-
-person -> shirt color.
-
-Perguntas como "qual a cor da camisa?" podem ser encaminhadas à VLM e analisadas visualmente.
+Removido (ColorAnalyzer/OpenCV eram parte do pipeline YOLO — ver seção 1). Perguntas sobre cor
+("qual a cor da camisa?", "a mochila é azul?") são respondidas diretamente pela VLM analisando a
+imagem, sem nenhuma classificação de cor pré-processada.
 
 ---
 
 # 11. SCENE JSON
 
-O formato deve seguir aproximadamente:
-
-{
-    "scene_id": "...",
-    "conversation_id": "...",
-    "image": {
-        "storage_key": "...",
-        "width": 1920,
-        "height": 1080
-    },
-    "model": {
-        "name": "...",
-        "task": "detect",
-        "dataset": "COCO"
-    },
-    "objects": [
-        {
-            "object_id": "...",
-            "class": {
-                "id": 0,
-                "name": "person",
-                "confidence": 0.98
-            },
-            "bbox": {
-                "x1": 100,
-                "y1": 200,
-                "x2": 500,
-                "y2": 900
-            },
-            "position": {
-                "horizontal": "center",
-                "vertical": "middle",
-                "region": "front-center"
-            },
-            "color": {
-                "name": "blue",
-                "rgb": [20, 80, 180],
-                "confidence": 0.82
-            }
-        }
-    ]
-}
-
-O formato pode evoluir, mas alterações devem ser justificadas.
+Removido. A VLM não recebe mais nenhum JSON estruturado descrevendo a cena — só a imagem crua,
+o histórico da conversa, a pergunta e as tools disponíveis. Ver seção 1 para o motivo da mudança.
 
 ---
 
@@ -468,8 +411,9 @@ User
 Device
 Conversation
 Scene
-DetectedObject
 Message
+Person
+PersonPhoto
 
 Relacionamentos:
 
@@ -478,6 +422,8 @@ User
     +--> Conversations
     |
     +--> Devices
+    |
+    +--> Persons
 
 Conversation
     |
@@ -485,9 +431,9 @@ Conversation
     |
     +--> Messages
 
-Scene
+Person
     |
-    +--> DetectedObjects
+    +--> PersonPhotos
 
 Messages
     |
@@ -535,11 +481,11 @@ SYSTEM PROMPT
 +
 IMAGE
 +
-SCENE JSON
-+
 CONVERSATION HISTORY
 +
 CURRENT QUESTION
++
+TOOLS (register_person, identify_persons)
 
 ---
 
@@ -549,7 +495,7 @@ A VLM deve ser instruída a:
 
 - ajudar uma pessoa cega ou com baixa visão;
 - responder de forma curta e natural;
-- priorizar a imagem e o Scene JSON;
+- priorizar a imagem (não há Scene JSON — ver seção 11);
 - não inventar objetos;
 - não transformar inferências em fatos;
 - indicar incerteza;
@@ -621,20 +567,19 @@ Prioridade:
 
 1. domain
 2. position analyzer
-3. color analyzer
-4. scene builder
-5. repositories
-6. services
-7. API
-8. integração com Ollama
-9. Android posteriormente
+3. face matcher
+4. repositories
+5. services
+6. API
+7. integração com Ollama
+8. Android posteriormente
 
 Não depender de GPU nos testes unitários.
 
 Mockar:
 
-YOLO
-Ollama
+VisionLanguageModel (Ollama/Gemini)
+FaceEncoder (InsightFace)
 filesystem quando apropriado.
 
 ---
@@ -699,9 +644,11 @@ Exemplo:
 DATABASE_URL
 OLLAMA_BASE_URL
 OLLAMA_MODEL
+GEMINI_API_KEY
+GEMINI_MODEL
 IMAGE_STORAGE_PATH
-YOLO_MODEL
-YOLO_CONFIDENCE_THRESHOLD
+FACE_MODEL_NAME
+FACE_MATCH_THRESHOLD
 
 Nunca colocar credenciais diretamente no código.
 
@@ -804,17 +751,13 @@ FastAPI
     ->
 salva imagem
     ->
-YOLO COCO
-    ->
-OpenCV
-    ->
-Scene JSON
-    ->
-PostgreSQL
+PostgreSQL (Scene + Conversation)
     ->
 usuário pergunta
     ->
-Qwen3.5 4B via Ollama
+Qwen3.5 4B via Ollama (fallback: Gemini Flash-Lite)
+    ->
+texto direto OU tool call (register_person/identify_persons -> InsightFace)
     ->
 resposta
     ->

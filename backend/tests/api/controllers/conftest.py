@@ -8,19 +8,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.api.dependencies import (
-    get_color_analyzer,
-    get_image_storage,
-    get_object_detector,
-    get_skip_yolo_pipeline,
-    get_vision_language_model,
-)
-from app.domain.protocols.object_detector import ObjectDetector
+from app.api.dependencies import get_face_encoder, get_image_storage, get_vision_language_model
+from app.domain.protocols.face_encoder import FaceEncoder
 from app.domain.protocols.vision_language_model import VisionLanguageModel
 from app.infrastructure.database.base import Base
 from app.infrastructure.database.session import get_db_session
 from app.infrastructure.storage.local_image_storage import LocalImageStorage
-from app.infrastructure.vision.opencv_color_analyzer import OpenCVColorAnalyzer
 from app.main import app
 
 
@@ -43,20 +36,20 @@ def api_db_session() -> Generator[Session, None, None]:
 
 
 @pytest.fixture
-def fake_object_detector() -> MagicMock:
-    return MagicMock(spec=ObjectDetector)
-
-
-@pytest.fixture
 def fake_vision_language_model() -> MagicMock:
     return MagicMock(spec=VisionLanguageModel)
 
 
 @pytest.fixture
+def fake_face_encoder() -> MagicMock:
+    return MagicMock(spec=FaceEncoder)
+
+
+@pytest.fixture
 def api_client(
     api_db_session: Session,
-    fake_object_detector: ObjectDetector,
     fake_vision_language_model: VisionLanguageModel,
+    fake_face_encoder: FaceEncoder,
     tmp_path: Path,
 ) -> Generator[TestClient, None, None]:
     def _override_db_session() -> Generator[Session, None, None]:
@@ -70,16 +63,11 @@ def api_client(
             raise
 
     app.dependency_overrides[get_db_session] = _override_db_session
-    app.dependency_overrides[get_object_detector] = lambda: fake_object_detector
-    app.dependency_overrides[get_color_analyzer] = lambda: OpenCVColorAnalyzer()
     app.dependency_overrides[get_image_storage] = lambda: LocalImageStorage(
         root_path=tmp_path, max_size_bytes=10_485_760
     )
     app.dependency_overrides[get_vision_language_model] = lambda: fake_vision_language_model
-    # Pinado explicitamente: sem isso, o valor real viria do `.env` do
-    # desenvolvedor (OLLAMA_ENABLED=false localmente já desliga o YOLO), e os
-    # testes deste arquivo passariam a depender de config local não commitada.
-    app.dependency_overrides[get_skip_yolo_pipeline] = lambda: False
+    app.dependency_overrides[get_face_encoder] = lambda: fake_face_encoder
 
     try:
         yield TestClient(app)
