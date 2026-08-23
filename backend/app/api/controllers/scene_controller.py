@@ -44,6 +44,5 @@ async def create_scene(
     return SceneCreationResponse(
         scene_id=scene.scene_id,
         conversation_id=scene.conversation_id,
-        object_count=len(scene.objects),
         status="created",
     )

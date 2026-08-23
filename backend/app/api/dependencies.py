@@ -9,31 +9,21 @@ from app.application.services.person_recognition_service import PersonRecognitio
 from app.application.services.prompt_composer import PromptComposer
 from app.application.services.scene_service import SceneService
 from app.config.settings import get_settings
-from app.domain.entities.model_metadata import ModelMetadata
-from app.domain.protocols.color_analyzer import ColorAnalyzer
 from app.domain.protocols.face_encoder import FaceEncoder
 from app.domain.protocols.image_storage import ImageStorage
-from app.domain.protocols.object_detector import ObjectDetector
 from app.domain.protocols.prompt_loader import PromptLoader
 from app.domain.protocols.vision_language_model import VisionLanguageModel
 from app.domain.services.face_matcher import FaceMatcher
 from app.domain.services.position_analyzer import PositionAnalyzer
-from app.domain.services.question_classifier import QuestionClassifier
-from app.domain.services.scene_builder import SceneBuilder
 from app.infrastructure.database.session import get_db_session
 from app.infrastructure.prompts.file_prompt_loader import FilePromptLoader
 from app.infrastructure.storage.local_image_storage import LocalImageStorage
 from app.infrastructure.vision.insightface_encoder import InsightFaceEncoder
-from app.infrastructure.vision.opencv_color_analyzer import OpenCVColorAnalyzer
-from app.infrastructure.vision.yolo_object_detector import YOLOObjectDetector
 from app.infrastructure.vlm.fallback_vision_language_model import FallbackVisionLanguageModel
 from app.infrastructure.vlm.gemini_vision_language_model import GeminiVisionLanguageModel
 from app.infrastructure.vlm.ollama_vision_language_model import OllamaVisionLanguageModel
 
 logger = logging.getLogger(__name__)
-
-_DETECTOR_TASK = "detect"
-_DETECTOR_DATASET = "COCO"
 
 
 @lru_cache
@@ -45,32 +35,8 @@ def get_image_storage() -> ImageStorage:
 
 
 @lru_cache
-def get_object_detector() -> ObjectDetector:
-    settings = get_settings()
-    return YOLOObjectDetector(
-        model_path=settings.yolo_model, confidence_threshold=settings.yolo_confidence_threshold
-    )
-
-
-@lru_cache
-def get_color_analyzer() -> ColorAnalyzer:
-    return OpenCVColorAnalyzer()
-
-
-@lru_cache
 def get_position_analyzer() -> PositionAnalyzer:
     return PositionAnalyzer()
-
-
-@lru_cache
-def get_scene_builder() -> SceneBuilder:
-    return SceneBuilder()
-
-
-@lru_cache
-def get_model_metadata() -> ModelMetadata:
-    settings = get_settings()
-    return ModelMetadata(name=settings.yolo_model, task=_DETECTOR_TASK, dataset=_DETECTOR_DATASET)
 
 
 @lru_cache
@@ -116,12 +82,6 @@ def get_vision_language_model() -> VisionLanguageModel:
 
 
 @lru_cache
-def get_skip_yolo_pipeline() -> bool:
-    settings = get_settings()
-    return not settings.ollama_enabled and settings.skip_yolo_for_gemini
-
-
-@lru_cache
 def get_face_encoder() -> FaceEncoder:
     settings = get_settings()
     return InsightFaceEncoder(
@@ -152,23 +112,8 @@ def get_person_recognition_service(
 def get_scene_service(
     session: Session = Depends(get_db_session),
     image_storage: ImageStorage = Depends(get_image_storage),
-    object_detector: ObjectDetector = Depends(get_object_detector),
-    position_analyzer: PositionAnalyzer = Depends(get_position_analyzer),
-    color_analyzer: ColorAnalyzer = Depends(get_color_analyzer),
-    scene_builder: SceneBuilder = Depends(get_scene_builder),
-    model_metadata: ModelMetadata = Depends(get_model_metadata),
-    skip_yolo_pipeline: bool = Depends(get_skip_yolo_pipeline),
 ) -> SceneService:
-    return SceneService(
-        session=session,
-        image_storage=image_storage,
-        object_detector=object_detector,
-        position_analyzer=position_analyzer,
-        color_analyzer=color_analyzer,
-        scene_builder=scene_builder,
-        model_metadata=model_metadata,
-        skip_yolo_pipeline=skip_yolo_pipeline,
-    )
+    return SceneService(session=session, image_storage=image_storage)
 
 
 @lru_cache
@@ -177,33 +122,23 @@ def get_prompt_loader() -> PromptLoader:
     return FilePromptLoader(prompts_root=settings.prompts_root)
 
 
-@lru_cache
-def get_question_classifier() -> QuestionClassifier:
-    return QuestionClassifier()
-
-
 def get_prompt_composer(
     prompt_loader: PromptLoader = Depends(get_prompt_loader),
-    question_classifier: QuestionClassifier = Depends(get_question_classifier),
 ) -> PromptComposer:
-    return PromptComposer(prompt_loader=prompt_loader, question_classifier=question_classifier)
+    return PromptComposer(prompt_loader=prompt_loader)
 
 
 def get_conversation_service(
     session: Session = Depends(get_db_session),
     image_storage: ImageStorage = Depends(get_image_storage),
     vision_language_model: VisionLanguageModel = Depends(get_vision_language_model),
-    model_metadata: ModelMetadata = Depends(get_model_metadata),
     prompt_composer: PromptComposer = Depends(get_prompt_composer),
     person_recognition_service: PersonRecognitionService = Depends(get_person_recognition_service),
-    skip_yolo_pipeline: bool = Depends(get_skip_yolo_pipeline),
 ) -> ConversationService:
     return ConversationService(
         session=session,
         image_storage=image_storage,
         vision_language_model=vision_language_model,
-        model_metadata=model_metadata,
         prompt_composer=prompt_composer,
         person_recognition_service=person_recognition_service,
-        skip_yolo_pipeline=skip_yolo_pipeline,
     )

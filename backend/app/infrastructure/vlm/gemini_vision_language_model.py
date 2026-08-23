@@ -1,5 +1,4 @@
 import base64
-import json
 import logging
 import time
 from typing import cast
@@ -8,7 +7,6 @@ import httpx
 
 from app.domain.entities.conversation_message import ConversationMessage
 from app.domain.entities.tool_call import ToolCall, ToolCallResponse, ToolDefinition
-from app.domain.entities.vlm_response import VLMResponse
 from app.domain.protocols.vision_language_model import (
     EmptyModelResponseError,
     VisionLanguageModelError,
@@ -74,53 +72,6 @@ class GeminiVisionLanguageModel:
         self,
         *,
         image: bytes,
-        scene_json: dict[str, object],
-        system_prompt: str,
-        conversation_history: list[ConversationMessage],
-        question: str,
-    ) -> VLMResponse:
-        image_b64 = self._prepare_image(image)
-        scene_context = json.dumps(scene_json, ensure_ascii=False) if scene_json else None
-        # Sem Scene JSON (YOLO desabilitado para o Gemini): a imagem sozinha
-        # já basta — ver PROMPT "Gemini Fallback Sem JSON YOLO".
-        question_text = (
-            f"Scene JSON:\n{scene_context}\n\nPergunta: {question}" if scene_context else question
-        )
-
-        contents = self._build_contents(conversation_history, question_text, image_b64)
-        payload: dict[str, object] = {
-            "system_instruction": {"parts": [{"text": system_prompt}]},
-            "contents": contents,
-        }
-
-        data, duration_ms = self._send(payload)
-        answer, _tool_call = self._parse_parts(
-            data
-        )  # ask() nunca envia tools, então não deveria vir
-
-        if not (answer or "").strip():
-            logger.error(
-                "gemini returned empty content model=%s duration_ms=%.1f",
-                self._model,
-                duration_ms,
-            )
-            raise EmptyModelResponseError(f"Gemini retornou content vazio (model={self._model})")
-        assert answer is not None
-
-        usage = cast(dict[str, object], data.get("usageMetadata", {}))
-        logger.info(
-            "gemini request succeeded model=%s duration_ms=%.1f prompt_tokens=%s output_tokens=%s",
-            self._model,
-            duration_ms,
-            usage.get("promptTokenCount"),
-            usage.get("candidatesTokenCount"),
-        )
-        return VLMResponse(text=answer, model=self._model, duration_ms=duration_ms)
-
-    def ask_with_tools(
-        self,
-        *,
-        image: bytes,
         system_prompt: str,
         conversation_history: list[ConversationMessage],
         question: str,
@@ -131,7 +82,9 @@ class GeminiVisionLanguageModel:
         payload: dict[str, object] = {
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": contents,
-            "tools": [
+        }
+        if tools:
+            payload["tools"] = [
                 {
                     "function_declarations": [
                         {
@@ -142,24 +95,27 @@ class GeminiVisionLanguageModel:
                         for tool in tools
                     ]
                 }
-            ],
-        }
+            ]
 
         data, duration_ms = self._send(payload)
         answer, tool_call = self._parse_parts(data)
 
         if tool_call is None and not (answer or "").strip():
             logger.error(
-                "gemini (tools) returned empty content model=%s duration_ms=%.1f",
+                "gemini returned empty content model=%s duration_ms=%.1f",
                 self._model,
                 duration_ms,
             )
             raise EmptyModelResponseError(f"Gemini retornou content vazio (model={self._model})")
 
+        usage = cast(dict[str, object], data.get("usageMetadata", {}))
         logger.info(
-            "gemini (tools) request succeeded model=%s duration_ms=%.1f tool_call=%s",
+            "gemini request succeeded model=%s duration_ms=%.1f prompt_tokens=%s "
+            "output_tokens=%s tool_call=%s",
             self._model,
             duration_ms,
+            usage.get("promptTokenCount"),
+            usage.get("candidatesTokenCount"),
             tool_call.name if tool_call else None,
         )
         return ToolCallResponse(

@@ -1,61 +1,38 @@
-import dataclasses
 import logging
 import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.entities.detection import Detection
-from app.domain.entities.model_metadata import ModelMetadata
 from app.domain.entities.scene import Scene
-from app.domain.protocols.color_analyzer import ColorAnalyzer
 from app.domain.protocols.image_storage import ImageStorage
-from app.domain.protocols.object_detector import ObjectDetector
-from app.domain.services.position_analyzer import PositionAnalyzer
-from app.domain.services.scene_builder import SceneBuilder
-from app.infrastructure.database.models import Conversation, DetectedObject, SceneModel, User
+from app.infrastructure.database.models import Conversation, SceneModel, User
 from app.infrastructure.repositories.conversation_repository import (
     SqlAlchemyConversationRepository,
 )
-from app.infrastructure.repositories.object_repository import SqlAlchemyObjectRepository
 from app.infrastructure.repositories.scene_repository import SqlAlchemySceneRepository
 
 logger = logging.getLogger(__name__)
 
 
 class SceneService:
-    """Orquestra o fluxo completo de criação de uma cena:
+    """Orquestra a criação de uma cena:
 
-        validar imagem -> criar scene_id -> salvar imagem -> YOLO ->
-        PositionAnalyzer -> ColorAnalyzer -> SceneBuilder -> PostgreSQL
-        (Scene, Conversation, DetectedObjects)
+        validar imagem -> salvar imagem -> PostgreSQL (Scene, Conversation)
 
     Cada chamada a `create_scene` sempre cria uma nova Scene e uma nova
-    Conversation — nunca reaproveita uma conversation existente.
+    Conversation — nunca reaproveita uma conversation existente. Não roda
+    nenhum pipeline de visão computacional aqui (YOLO/ColorAnalyzer/
+    PositionAnalyzer/SceneBuilder removidos — ver PROMPT "Unificar
+    Comportamento Gemini/Ollama"): a VLM analisa a imagem diretamente,
+    sem Scene JSON pré-processado.
     """
 
-    def __init__(
-        self,
-        session: Session,
-        image_storage: ImageStorage,
-        object_detector: ObjectDetector,
-        position_analyzer: PositionAnalyzer,
-        color_analyzer: ColorAnalyzer,
-        scene_builder: SceneBuilder,
-        model_metadata: ModelMetadata,
-        skip_yolo_pipeline: bool = False,
-    ) -> None:
+    def __init__(self, session: Session, image_storage: ImageStorage) -> None:
         self._session = session
         self._image_storage = image_storage
-        self._object_detector = object_detector
-        self._position_analyzer = position_analyzer
-        self._color_analyzer = color_analyzer
-        self._scene_builder = scene_builder
-        self._model_metadata = model_metadata
-        self._skip_yolo_pipeline = skip_yolo_pipeline
         self._scene_repository = SqlAlchemySceneRepository(session)
         self._conversation_repository = SqlAlchemyConversationRepository(session)
-        self._object_repository = SqlAlchemyObjectRepository(session)
 
     def create_scene(self, filename: str, content: bytes) -> Scene:
         scene_id = uuid.uuid4()
@@ -67,18 +44,6 @@ class SceneService:
         stored_image = self._image_storage.save(scene_id, filename, content)
 
         try:
-            if self._skip_yolo_pipeline:
-                logger.info("Skipping YOLO (Gemini fallback) scene_id=%s", scene_id)
-                detections: list[Detection] = []
-            else:
-                detections = self._detect_and_enrich(
-                    content, stored_image.width, stored_image.height
-                )
-
-            scene = self._scene_builder.build(
-                image=stored_image, model=self._model_metadata, detections=detections
-            )
-
             scene_row = self._scene_repository.add(
                 SceneModel(
                     id=scene_id,
@@ -97,18 +62,10 @@ class SceneService:
                 Conversation(user_id=user.id, scene_id=scene_row.id)
             )
 
-            if detections:
-                self._object_repository.add_many(
-                    [
-                        self._to_detected_object_row(scene_row.id, detection)
-                        for detection in detections
-                    ]
-                )
-
             # Commit explícito aqui, antes de retornar ao controller — a
-            # unidade de trabalho (Scene + Conversation + DetectedObjects)
-            # só é considerada concluída quando este commit termina, e só
-            # então a resposta HTTP de sucesso é construída.
+            # unidade de trabalho (Scene + Conversation) só é considerada
+            # concluída quando este commit termina, e só então a resposta
+            # HTTP de sucesso é construída.
             self._session.commit()
         except Exception:
             self._session.rollback()
@@ -120,20 +77,7 @@ class SceneService:
                 )
             raise
 
-        return dataclasses.replace(
-            scene, scene_id=scene_row.id, conversation_id=conversation_row.id
-        )
-
-    def _detect_and_enrich(self, content: bytes, width: int, height: int) -> list[Detection]:
-        detections = self._object_detector.detect(content)
-
-        enriched: list[Detection] = []
-        for detection in detections:
-            position = self._position_analyzer.analyze(detection.bbox, width, height)
-            color = self._color_analyzer.analyze(content, detection.bbox)
-            enriched.append(dataclasses.replace(detection, position=position, color=color))
-
-        return enriched
+        return Scene(image=stored_image, scene_id=scene_row.id, conversation_id=conversation_row.id)
 
     def _get_or_create_default_user(self) -> User:
         # Ainda não há autenticação/gestão de usuários (fora de escopo desta
@@ -145,27 +89,3 @@ class SceneService:
             self._session.add(user)
             self._session.flush()
         return user
-
-    @staticmethod
-    def _to_detected_object_row(scene_id: uuid.UUID, detection: Detection) -> DetectedObject:
-        assert detection.position is not None
-        assert detection.color is not None
-
-        return DetectedObject(
-            scene_id=scene_id,
-            class_id=detection.class_id,
-            class_name=detection.class_name,
-            confidence=detection.confidence,
-            bbox_x1=detection.bbox.x1,
-            bbox_y1=detection.bbox.y1,
-            bbox_x2=detection.bbox.x2,
-            bbox_y2=detection.bbox.y2,
-            position_horizontal=detection.position.horizontal.value,
-            position_vertical=detection.position.vertical.value,
-            position_region=detection.position.region.value,
-            color_name=detection.color.name.value,
-            color_r=detection.color.rgb[0],
-            color_g=detection.color.rgb[1],
-            color_b=detection.color.rgb[2],
-            color_confidence=detection.color.confidence,
-        )

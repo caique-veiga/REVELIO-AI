@@ -6,7 +6,6 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Enum,
-    Float,
     ForeignKey,
     Integer,
     LargeBinary,
@@ -50,9 +49,6 @@ class SceneModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     image_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     conversation: Mapped["Conversation | None"] = relationship(back_populates="scene")
-    detected_objects: Mapped[list["DetectedObject"]] = relationship(
-        back_populates="scene", cascade="all, delete-orphan"
-    )
 
 
 class Conversation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -69,33 +65,6 @@ class Conversation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
         order_by="Message.created_at",
     )
-
-
-class DetectedObject(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    __tablename__ = "detected_objects"
-
-    scene_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenes.id"), index=True)
-
-    class_id: Mapped[int] = mapped_column(Integer)
-    class_name: Mapped[str] = mapped_column(String(100))
-    confidence: Mapped[float] = mapped_column(Float)
-
-    bbox_x1: Mapped[int] = mapped_column(Integer)
-    bbox_y1: Mapped[int] = mapped_column(Integer)
-    bbox_x2: Mapped[int] = mapped_column(Integer)
-    bbox_y2: Mapped[int] = mapped_column(Integer)
-
-    position_horizontal: Mapped[str] = mapped_column(String(10))
-    position_vertical: Mapped[str] = mapped_column(String(10))
-    position_region: Mapped[str] = mapped_column(String(20))
-
-    color_name: Mapped[str] = mapped_column(String(50))
-    color_r: Mapped[int] = mapped_column(Integer)
-    color_g: Mapped[int] = mapped_column(Integer)
-    color_b: Mapped[int] = mapped_column(Integer)
-    color_confidence: Mapped[float] = mapped_column(Float)
-
-    scene: Mapped["SceneModel"] = relationship(back_populates="detected_objects")
 
 
 class Person(UUIDPrimaryKeyMixin, TimestampMixin, Base):

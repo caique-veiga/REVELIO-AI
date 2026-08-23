@@ -6,7 +6,7 @@ import time
 import httpx
 
 from app.domain.entities.conversation_message import ConversationMessage
-from app.domain.entities.vlm_response import VLMResponse
+from app.domain.entities.tool_call import ToolCall, ToolCallResponse, ToolDefinition
 from app.domain.protocols.vision_language_model import (
     EmptyModelResponseError,
     ModelUnavailableError,
@@ -29,6 +29,14 @@ class OllamaVisionLanguageModel:
 
     Não assume que o Ollama roda na mesma máquina — o endereço vem sempre de
     `base_url` (configurado externamente via OLLAMA_BASE_URL).
+
+    Usa o suporte nativo a tool calling da API do Ollama (`tools` no
+    payload, `message.tool_calls` na resposta) — ver PROMPT "Unificar
+    Comportamento Gemini/Ollama". Não há garantia de que todo modelo vision
+    rodando localmente suporte tool calling de forma tão confiável quanto o
+    Gemini; um tool call malformado ou ausente quando esperado vira
+    VisionLanguageModelError, e quem chama (FallbackVisionLanguageModel) cai
+    para o Gemini automaticamente.
     """
 
     def __init__(
@@ -68,38 +76,43 @@ class OllamaVisionLanguageModel:
         self,
         *,
         image: bytes,
-        scene_json: dict[str, object],
         system_prompt: str,
         conversation_history: list[ConversationMessage],
         question: str,
-    ) -> VLMResponse:
+        tools: list[ToolDefinition],
+    ) -> ToolCallResponse:
         self.health_check()
 
         image_b64 = base64.b64encode(image).decode("ascii")
-        scene_context = json.dumps(scene_json, ensure_ascii=False)
 
         messages: list[dict[str, object]] = [{"role": "system", "content": system_prompt}]
         messages.extend(
             {"role": entry.role.value, "content": entry.content} for entry in conversation_history
         )
-        messages.append(
-            {
-                "role": "user",
-                "content": f"Scene JSON:\n{scene_context}\n\nPergunta: {question}",
-                "images": [image_b64],
-            }
-        )
+        messages.append({"role": "user", "content": question, "images": [image_b64]})
 
         # `num_ctx` explícito: sem isso o Ollama usa um padrão pequeno
         # (observado: 4096 tokens no total prompt+geração). Modelos com
         # "thinking" (qwen3.5) podem gastar todo esse orçamento raciocinando
         # e nunca chegar a escrever `content` — ver EmptyModelResponseError.
-        payload = {
+        payload: dict[str, object] = {
             "model": self._model,
             "messages": messages,
             "stream": False,
             "options": {"num_ctx": self._num_ctx},
         }
+        if tools:
+            payload["tools"] = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.parameters,
+                    },
+                }
+                for tool in tools
+            ]
 
         started = time.monotonic()
         last_error: Exception | None = None
@@ -135,10 +148,10 @@ class OllamaVisionLanguageModel:
 
             duration_ms = (time.monotonic() - started) * 1000
             data = response.json()
-            answer = data["message"]["content"]
+            answer, tool_call = self._parse_message(data)
             done_reason = data.get("done_reason")
 
-            if not answer.strip():
+            if tool_call is None and not (answer or "").strip():
                 logger.error(
                     "ollama returned empty content model=%s done_reason=%s "
                     "eval_count=%s prompt_eval_count=%s duration_ms=%.1f",
@@ -153,13 +166,17 @@ class OllamaVisionLanguageModel:
                 )
 
             logger.info(
-                "ollama request succeeded model=%s duration_ms=%.1f attempt=%d done_reason=%s",
+                "ollama request succeeded model=%s duration_ms=%.1f attempt=%d "
+                "done_reason=%s tool_call=%s",
                 self._model,
                 duration_ms,
                 attempt,
                 done_reason,
+                tool_call.name if tool_call else None,
             )
-            return VLMResponse(text=answer, model=self._model, duration_ms=duration_ms)
+            return ToolCallResponse(
+                text=answer, tool_call=tool_call, model=self._model, duration_ms=duration_ms
+            )
 
         duration_ms = (time.monotonic() - started) * 1000
         logger.error(
@@ -171,3 +188,29 @@ class OllamaVisionLanguageModel:
         raise OllamaUnavailableError(
             f"Ollama inacessível em {self._base_url} após {attempts} tentativas"
         ) from last_error
+
+    @staticmethod
+    def _parse_message(data: dict[str, object]) -> tuple[str | None, ToolCall | None]:
+        message = data.get("message")
+        if not isinstance(message, dict):
+            return None, None
+
+        tool_call: ToolCall | None = None
+        tool_calls = message.get("tool_calls") or []
+        if tool_calls:
+            function = tool_calls[0].get("function", {}) if isinstance(tool_calls[0], dict) else {}
+            name = function.get("name") if isinstance(function, dict) else None
+            if name:
+                arguments = function.get("arguments", {})
+                if isinstance(arguments, str):
+                    try:
+                        arguments = json.loads(arguments)
+                    except json.JSONDecodeError:
+                        arguments = {}
+                tool_call = ToolCall(
+                    name=name, arguments=arguments if isinstance(arguments, dict) else {}
+                )
+
+        content = message.get("content")
+        text = content if isinstance(content, str) and content.strip() else None
+        return text, tool_call

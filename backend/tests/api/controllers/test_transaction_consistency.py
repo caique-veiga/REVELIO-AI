@@ -23,23 +23,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.api.dependencies import (
-    get_color_analyzer,
-    get_image_storage,
-    get_object_detector,
-    get_skip_yolo_pipeline,
-    get_vision_language_model,
-)
-from app.domain.entities.bounding_box import BoundingBox
-from app.domain.entities.detection import Detection
-from app.domain.protocols.object_detector import ObjectDetector
+from app.api.dependencies import get_image_storage, get_vision_language_model
 from app.domain.protocols.vision_language_model import VisionLanguageModel
 from app.infrastructure.database.base import Base
 from app.infrastructure.database.models import Conversation, SceneModel
 from app.infrastructure.database.session import get_db_session
-from app.infrastructure.repositories.object_repository import SqlAlchemyObjectRepository
+from app.infrastructure.repositories.conversation_repository import (
+    SqlAlchemyConversationRepository,
+)
 from app.infrastructure.storage.local_image_storage import LocalImageStorage
-from app.infrastructure.vision.opencv_color_analyzer import OpenCVColorAnalyzer
 from app.main import app
 
 
@@ -66,26 +58,13 @@ def per_request_session(tmp_path: Path) -> Generator[ClientAndEngine, None, None
         finally:
             session.close()
 
-    fake_object_detector = MagicMock(spec=ObjectDetector)
-    fake_object_detector.detect.return_value = [
-        Detection(
-            class_id=24,
-            class_name="mochila",
-            confidence=0.9,
-            bbox=BoundingBox(x1=1, y1=1, x2=10, y2=10),
-        )
-    ]
-
     app.dependency_overrides[get_db_session] = _fresh_session_per_request
-    app.dependency_overrides[get_object_detector] = lambda: fake_object_detector
-    app.dependency_overrides[get_color_analyzer] = lambda: OpenCVColorAnalyzer()
     app.dependency_overrides[get_image_storage] = lambda: LocalImageStorage(
         root_path=tmp_path / "images", max_size_bytes=10_485_760
     )
     app.dependency_overrides[get_vision_language_model] = lambda: MagicMock(
         spec=VisionLanguageModel
     )
-    app.dependency_overrides[get_skip_yolo_pipeline] = lambda: False
 
     try:
         yield ClientAndEngine(client=TestClient(app), engine=engine)
@@ -169,7 +148,7 @@ class TestRollbackOnPersistenceFailure:
         assert (scenes_before, conversations_before) == (0, 0)
 
         with patch.object(
-            SqlAlchemyObjectRepository, "add_many", side_effect=RuntimeError("falha simulada")
+            SqlAlchemyConversationRepository, "add", side_effect=RuntimeError("falha simulada")
         ):
             response = client.post(
                 "/api/v1/scenes", files={"file": ("photo.jpg", image_bytes, "image/jpeg")}
@@ -178,8 +157,8 @@ class TestRollbackOnPersistenceFailure:
 
         scenes_after, conversations_after = _row_counts(per_request_session.engine)
         assert (scenes_after, conversations_after) == (0, 0), (
-            "Uma falha em DetectedObjects não deveria deixar Scene/Conversation "
-            "parcialmente persistidas — a unidade de trabalho inteira deve ser "
+            "Uma falha ao persistir a Conversation não deveria deixar a Scene "
+            "parcialmente persistida — a unidade de trabalho inteira deve ser "
             "revertida atomicamente."
         )
 
@@ -191,7 +170,7 @@ def test_rollback_removes_orphaned_image_from_storage(
     images_dir = tmp_path / "images"
 
     with patch.object(
-        SqlAlchemyObjectRepository, "add_many", side_effect=RuntimeError("falha simulada")
+        SqlAlchemyConversationRepository, "add", side_effect=RuntimeError("falha simulada")
     ):
         response = per_request_session.client.post(
             "/api/v1/scenes", files={"file": ("photo.jpg", image_bytes, "image/jpeg")}
@@ -212,7 +191,7 @@ def test_scene_id_from_failed_request_is_never_persisted(
 
     with (
         patch.object(
-            SqlAlchemyObjectRepository, "add_many", side_effect=RuntimeError("falha simulada")
+            SqlAlchemyConversationRepository, "add", side_effect=RuntimeError("falha simulada")
         ),
         patch("uuid.uuid4", return_value=fixed_id),
     ):
