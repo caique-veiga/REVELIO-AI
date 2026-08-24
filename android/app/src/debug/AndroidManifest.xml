@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Mesclado só em builds de debug (ver source set "debug"). Permite tráfego
+    HTTP sem TLS para o backend em desenvolvimento (ex: http://192.168.x.x:8000),
+    já que o FastAPI local normalmente não tem certificado. Build de release
+    NÃO herda isso — exige HTTPS por padrão, como deve ser em produção.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config_debug"
+        tools:targetApi="28"
+        tools:replace="android:usesCleartextTraffic,android:networkSecurityConfig" />
+</manifest>

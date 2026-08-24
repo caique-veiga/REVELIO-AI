@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícone provisório simples (contorno de olho + pupila), até haver um ícone final de marca. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M54,30 C70,30 83,42 88,54 C83,66 70,78 54,78 C38,78 25,66 20,54 C25,42 38,30 54,30 Z"
+        android:strokeColor="#14B8A6"
+        android:strokeWidth="4"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M54,54 m-13,0 a13,13 0 1,0 26,0 a13,13 0 1,0 -26,0"
+        android:fillColor="#14B8A6" />
+</vector>

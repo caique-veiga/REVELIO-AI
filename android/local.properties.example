@@ -1,0 +1,11 @@
+# Copie para local.properties (já gitignored) e ajuste pro seu ambiente.
+# local.properties NUNCA deve ser commitado — cada dev/máquina tem o seu.
+
+# Preenchido automaticamente pelo Android Studio ao abrir o projeto:
+# sdk.dir=/caminho/para/Android/Sdk
+
+# URL do backend FastAPI. Durante desenvolvimento com emulador, 10.0.2.2 é o
+# alias do próprio host (não é um IP real de máquina nenhuma, por isso é
+# seguro deixar como padrão no build.gradle.kts). Para testar em aparelho
+# físico na mesma rede, aponte para o IP real do seu PC:
+# backendBaseUrl=http://192.168.0.106:8000/

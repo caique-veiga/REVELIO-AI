@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Revelio AI</string>
+
+    <string name="button_capture_photo">Tirar foto</string>
+    <string name="button_capture_photo_description">Tirar uma nova foto do ambiente</string>
+    <string name="button_ask_question">Fazer pergunta</string>
+    <string name="button_ask_question_description">Segure para falar uma pergunta sobre a foto</string>
+    <string name="button_retry">Tentar novamente</string>
+
+    <string name="status_idle">Toque em tirar foto para começar</string>
+    <string name="status_capturing">Abrindo câmera…</string>
+    <string name="status_uploading">Enviando foto…</string>
+    <string name="status_processing">Processando…</string>
+    <string name="status_ready">Pronto. Toque em fazer pergunta</string>
+    <string name="status_listening">Ouvindo…</string>
+    <string name="status_asking">Consultando…</string>
+    <string name="status_speaking">Respondendo…</string>
+
+    <string name="error_camera_unavailable">Câmera indisponível neste aparelho.</string>
+    <string name="error_camera_permission_denied">Permissão de câmera negada. Não é possível tirar fotos.</string>
+    <string name="error_camera_permission_permanently_denied">Permissão de câmera bloqueada. Ative nas configurações do aparelho.</string>
+    <string name="error_microphone_unavailable">Microfone indisponível neste aparelho.</string>
+    <string name="error_microphone_permission_denied">Permissão de microfone negada. Não é possível ouvir perguntas.</string>
+    <string name="error_microphone_permission_permanently_denied">Permissão de microfone bloqueada. Ative nas configurações do aparelho.</string>
+    <string name="error_speech_empty">Não ouvi nenhuma pergunta. Tente novamente.</string>
+    <string name="error_network">Falha de conexão. Verifique sua internet e tente novamente.</string>
+    <string name="error_timeout">O servidor demorou para responder. Tente novamente.</string>
+    <string name="error_bad_request">Não consegui processar essa foto. Tire outra e tente de novo.</string>
+    <string name="error_image_too_large">Essa foto é grande demais. Tire outra foto.</string>
+    <string name="error_not_found">A conversa atual não foi encontrada. Tire uma nova foto.</string>
+    <string name="error_service_unavailable">O assistente está indisponível no momento. Tente novamente em instantes.</string>
+    <string name="error_server">Algo deu errado no servidor. Tente novamente.</string>
+    <string name="error_invalid_response">Recebi uma resposta inválida do servidor. Tente novamente.</string>
+    <string name="error_empty_response">O assistente não retornou uma resposta. Tente novamente.</string>
+    <string name="error_no_conversation">Nenhuma foto ativa. Tire uma foto antes de perguntar.</string>
+    <string name="error_generic">Ocorreu um erro. Tente novamente.</string>
+</resources>
