@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Fotos capturadas ficam em cache interno só até o upload — nunca vão
+         pra galeria pública do usuário (ver "não implementar galeria"). -->
+    <cache-path name="captured_photos" path="captured_photos/" />
+</paths>

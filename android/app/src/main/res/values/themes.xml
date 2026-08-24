@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema base só pra janela antes do Compose assumir o conteúdo — o
+         tema visual de verdade (cores, contraste) é definido em
+         presentation/theme/Theme.kt (Compose). -->
+    <style name="Theme.RevelioAI" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
