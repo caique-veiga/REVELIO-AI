@@ -1,140 +1,121 @@
-# Revelio AI
+# REVELIO-AI: Assistente Visual Multimodal para Pessoas Cegas ou com Baixa Visão
 
-Assistente visual para pessoas cegas ou com baixa visão — protótipo desenvolvido como projeto de
-pós-graduação em IA Generativa e LLMs.
+## Identificação
 
-## Objetivo
+**Aluno:** Caique Veiga de Lima Muniz
+**Orientador:** Leonardo
+**Turma:** Inteligência Artificial Generativa & Large Language Models
+**Matrícula:** 252100206
 
-Um aplicativo Android captura uma fotografia e a envia para o backend, que salva a imagem e cria
-uma nova `Conversation`. O usuário então faz perguntas sobre a cena; cada pergunta, junto da
-imagem e do histórico da conversa, é enviada diretamente a uma VLM multimodal — o modelo analisa a
-imagem e decide sozinho como responder: com texto direto, ou chamando uma *tool*
-(`register_person`/`identify_persons`) para cadastrar ou reconhecer pessoas por reconhecimento
-facial. A resposta é lida em voz alta pelo aplicativo Android via Text-to-Speech.
+**Código-fonte:** https://github.com/caique-veiga/REVELIO-AI
 
-Pipeline unificado: Ollama (Qwen, local) é tentado primeiro quando habilitado, com fallback
-automático para o Gemini Flash-Lite (API) em caso de falha — ambos recebem exatamente a mesma
-coisa (imagem + histórico + pergunta + tools), sem nenhum pré-processamento estruturado (JSON de
-detecção de objetos) entre a imagem e o modelo.
+---
 
-Cada nova fotografia inicia uma nova conversa — o histórico de uma cena anterior nunca é usado na
-cena seguinte.
+## Resumo
 
-Esta é a primeira versão do projeto. Funcionalidades como detecção de perigos, depth estimation,
-segmentação, OCR, RAG ou microsserviços estão fora de escopo por enquanto — veja
-[CLAUDE_CONTEXT.md](CLAUDE_CONTEXT.md) para o contexto arquitetural completo.
+O REVELIO-AI é um protótipo de assistente visual multimodal desenvolvido para auxiliar pessoas cegas ou com baixa visão na compreensão de cenas capturadas por uma câmera. A aplicação utiliza um aplicativo Android para captura de imagens e interação por voz, um backend desenvolvido em FastAPI e modelos de visão e linguagem (Vision-Language Models — VLMs) para interpretar as imagens e responder às perguntas do usuário.
 
-## Arquitetura
+A arquitetura foi projetada para permitir o uso de um modelo local, executado por meio do Ollama, com fallback para a API do Gemini quando necessário. Após o envio de uma fotografia, o backend armazena a imagem, cria uma nova conversa associada à cena e encaminha a imagem, o histórico da conversa e a pergunta do usuário ao modelo multimodal. O sistema também utiliza Tool Calling para disponibilizar funcionalidades estruturadas, como cadastro e identificação de pessoas, apoiadas pelo InsightFace.
 
-O backend é um **modular monolith** em FastAPI, organizado em camadas:
+O projeto busca explorar uma arquitetura de baixo custo e modular para aplicações assistivas baseadas em Inteligência Artificial Generativa, combinando processamento multimodal, interação por voz, reconhecimento facial e execução local de modelos.
 
-```
-Controller -> Application Service -> Domain (interfaces) -> Infrastructure (implementações)
-```
+---
 
-```
-backend/app/
-    api/             # controllers (rotas) e schemas (Pydantic)
-    application/      # services de orquestração
-    domain/          # entidades, modelos de domínio e protocols (interfaces)
-    infrastructure/  # implementações concretas: database, repositories, storage, vision, vlm
-    config/          # configuração tipada (Settings)
-```
+## Introdução
 
-O backend e a máquina com GPU (que roda o Ollama) são hosts diferentes, conectados por uma rede
-privada/VPN — o endereço do Ollama é sempre configurável via `OLLAMA_BASE_URL`, nunca hardcoded.
+Pessoas cegas ou com baixa visão podem encontrar dificuldades para obter informações visuais presentes no ambiente, especialmente em situações nas quais não há outra pessoa disponível para descrever uma cena. Sistemas de visão computacional podem auxiliar nesse processo ao transformar informações presentes em imagens em descrições compreensíveis.
 
-## Stack
+O REVELIO-AI foi desenvolvido com o objetivo de investigar a aplicação de modelos multimodais capazes de receber imagens e linguagem natural simultaneamente. Durante o desenvolvimento, a abordagem inicialmente baseada em detecção de objetos e processamento estruturado da cena foi simplificada após testes demonstrarem que um VLM poderia interpretar diretamente a imagem e responder a perguntas relacionadas ao conteúdo visual.
 
-- Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, PostgreSQL
-- Pillow para validação/inspeção de imagens; armazenamento local em `data/images/`
-- Ollama + Qwen (tier 1, local) com fallback automático para Gemini Flash-Lite (tier 2, API) — os
-  dois suportam tool calling (`register_person`/`identify_persons`)
-- InsightFace (modelo `buffalo_l`, CPU/ONNX) para detecção facial + embedding, usado no
-  reconhecimento de pessoas
-- pytest, Ruff, mypy
+A solução atual utiliza uma arquitetura modular monolítica, permitindo separar as responsabilidades da API, dos serviços de aplicação, do domínio e das implementações de infraestrutura. Essa organização facilita a substituição do modelo de visão, do armazenamento e de outros componentes sem alterar as regras centrais da aplicação.
 
-Gerenciamento de dependências e ambiente virtual com [uv](https://docs.astral.sh/uv/).
+---
 
-## Como executar
+## Arquitetura e Implementação
 
-Instale as dependências e crie o ambiente virtual:
+O fluxo principal do sistema é composto pelas seguintes etapas:
 
-```bash
-uv sync
-```
+1. O usuário captura uma fotografia utilizando o aplicativo Android.
+2. A imagem é enviada para o backend por meio da API REST.
+3. O backend armazena a imagem localmente e cria uma nova cena e uma nova conversa.
+4. O identificador da conversa é retornado ao aplicativo.
+5. O usuário realiza uma pergunta por voz sobre a imagem.
+6. A pergunta é enviada ao backend juntamente com o histórico da conversa.
+7. O backend encaminha a imagem, o histórico, a pergunta e as ferramentas disponíveis para o VLM.
+8. O modelo pode responder diretamente ou solicitar a execução de uma ferramenta.
+9. A resposta é retornada ao aplicativo Android e pode ser reproduzida por síntese de voz.
+10. Quando uma nova fotografia é capturada, uma nova conversa é iniciada.
 
-Copie `.env.example` para `.env` e ajuste os valores conforme seu ambiente:
+### Componentes principais
 
-```bash
-cp .env.example .env
+**Aplicativo Android**
+
+Responsável pela captura da fotografia, entrada de voz, comunicação HTTP com o backend e reprodução da resposta utilizando Text-to-Speech (TTS). A interface foi mantida propositalmente simples, priorizando a interação por câmera e voz.
+
+**Backend FastAPI**
+
+Implementa a API REST e coordena o processamento das cenas e das perguntas. A aplicação segue uma organização modular:
+
+```text
+Controller
+    ↓
+Application Service
+    ↓
+Domain Interfaces
+    ↓
+Infrastructure
 ```
 
-### Banco de dados
+As interfaces do domínio permitem desacoplar o sistema das implementações específicas utilizadas na infraestrutura.
 
-Suba um PostgreSQL de desenvolvimento via Docker Compose:
+**Banco de dados**
 
-```bash
-docker compose -f docker/docker-compose.yml up -d
+O PostgreSQL é utilizado para persistir informações relacionadas às cenas e conversas.
+
+**Armazenamento de imagens**
+
+As imagens recebidas são armazenadas localmente pelo backend. Cada imagem é associada a uma nova cena e a uma nova conversa.
+
+**Vision-Language Model**
+
+A interface de VLM permite utilizar diferentes provedores com o mesmo fluxo de aplicação. A configuração atual utiliza:
+
+- Ollama + modelo Qwen como primeira opção;
+- Gemini Flash-Lite como fallback;
+- imagem, histórico, pergunta e ferramentas enviados de forma multimodal.
+
+**Reconhecimento facial**
+
+O InsightFace é utilizado para geração de embeddings faciais e comparação de similaridade. O reconhecimento é disponibilizado ao VLM por meio de ferramentas, evitando que a lógica de reconhecimento fique diretamente acoplada ao modelo de linguagem.
+
+### Tool Calling
+
+O modelo pode utilizar ferramentas para executar operações estruturadas relacionadas às pessoas presentes na cena.
+
+Entre as ferramentas implementadas estão:
+
+- `register_person`: registra uma pessoa a partir de uma face detectada;
+- `identify_persons`: compara faces presentes na imagem com pessoas previamente registradas.
+
+Dessa forma, o modelo pode utilizar a linguagem natural para decidir quando uma operação estruturada deve ser executada.
+
+---
+
+## Resultados
+
+O protótipo implementa o fluxo principal de captura de imagem, criação de cena, criação de conversa e interação multimodal por perguntas.
+
+A API disponibiliza, entre outros, os seguintes endpoints:
+
+### Criar uma cena
+
+```http
+POST /api/v1/scenes
 ```
 
-Aplique as migrations:
+Recebe uma imagem em formato multipart e cria uma nova cena e uma nova conversa.
 
-```bash
-uv run alembic upgrade head
-```
-
-Para criar uma nova migration depois de alterar os models (`backend/app/infrastructure/database/models.py`):
-
-```bash
-uv run alembic revision --autogenerate -m "descrição da mudança"
-```
-
-### Servidor
-
-Suba o servidor de desenvolvimento:
-
-```bash
-uv run uvicorn app.main:app --app-dir backend --reload
-```
-
-Verifique se está no ar:
-
-```bash
-curl http://localhost:8000/health
-# {"status": "ok"}
-```
-
-### VLM: Ollama + Gemini (pipeline unificado)
-
-`ConversationService` chama sempre o mesmo método — `VisionLanguageModel.ask(image, system_prompt,
-conversation_history, question, tools)` — não importa se quem responde é o Ollama ou o Gemini. Não
-há Scene JSON nem qualquer outro pré-processamento estruturado: a VLM recebe a imagem crua e decide
-sozinha se responde com texto ou chama uma tool.
-
-- `OLLAMA_ENABLED=true` (padrão): tenta o Ollama/Qwen primeiro (`OLLAMA_BASE_URL`,
-  `OLLAMA_MODEL`); se falhar (indisponível, timeout, resposta vazia, tool call malformado), cai
-  automaticamente para o Gemini.
-- `OLLAMA_ENABLED=false`: usa só o Gemini (`GEMINI_API_KEY` obrigatório).
-
-O suporte a tool calling do Ollama depende do modelo configurado — não há garantia de que todo
-modelo vision local faça function calling de forma tão confiável quanto o Gemini; qualquer
-comportamento inesperado vira erro e aciona o fallback automaticamente.
-
-### Reconhecimento de pessoas
-
-Duas tools ficam sempre disponíveis para a VLM: `register_person` (cadastra uma pessoa a partir de
-uma foto com exatamente um rosto) e `identify_persons` (compara os rostos da cena atual contra as
-pessoas já cadastradas do usuário). `InsightFaceEncoder` faz detecção + embedding em uma única
-chamada; a similaridade usa distância de cosseno (`FaceMatcher`, limiar configurável via
-`FACE_MATCH_THRESHOLD`). Não há filtro por classe de objeto antes do reconhecimento facial — decidir
-se há um rosto é responsabilidade exclusiva do `FaceEncoder`.
-
-### API
-
-`POST /api/v1/scenes` recebe uma imagem (`multipart/form-data`, campo `file`), valida, salva no
-filesystem local e persiste `Scene` + `Conversation` no PostgreSQL — cada chamada sempre cria uma
-nova `Scene` e uma nova `Conversation` (nunca reaproveita uma existente). Retorna:
+Resposta simplificada:
 
 ```json
 {
@@ -144,15 +125,15 @@ nova `Scene` e uma nova `Conversation` (nunca reaproveita uma existente). Retorn
 }
 ```
 
-Erros de imagem inválida/não suportada retornam `400`, imagem grande demais retorna `413`; qualquer
-outra falha inesperada retorna `500` (logada no servidor, sem vazar detalhes internos na resposta).
+### Enviar uma pergunta
 
-```bash
-curl -X POST http://localhost:8000/api/v1/scenes -F "file=@caminho/para/imagem.jpg"
+```http
+POST /api/v1/conversations/{conversation_id}/messages
 ```
 
-`POST /api/v1/conversations/{conversation_id}/messages` envia a pergunta à VLM ativa (Ollama com
-fallback para Gemini, ou só Gemini) junto da imagem e do histórico, e retorna a resposta:
+Envia uma pergunta relacionada à cena associada à conversa.
+
+Resposta simplificada:
 
 ```json
 {
@@ -161,16 +142,161 @@ fallback para Gemini, ou só Gemini) junto da imagem e do histórico, e retorna 
 }
 ```
 
-Como ainda não há autenticação/gestão de usuários, o serviço reutiliza um único usuário padrão
-(criado automaticamente na primeira cena) como dono provisório de todas as conversations.
+Cada nova fotografia inicia uma nova conversa. Dessa maneira, o histórico utilizado pelo VLM permanece associado somente à cena atualmente analisada.
 
-### Testes e qualidade
+A arquitetura também permite alternar entre processamento local e processamento por API. O uso do Ollama possibilita executar o modelo localmente em uma máquina equipada com GPU, enquanto o Gemini pode ser utilizado como alternativa quando o modelo local não estiver disponível ou não produzir uma resposta adequada.
+
+O sistema possui ainda testes automatizados utilizando `pytest`, análise estática com `mypy` e verificação de qualidade de código com `Ruff`.
+
+---
+
+## Conclusões
+
+O desenvolvimento do REVELIO-AI permitiu investigar a utilização de modelos multimodais como núcleo de uma aplicação assistiva. A arquitetura inicialmente considerada utilizava uma etapa de detecção de objetos e geração de informações estruturadas antes do processamento pelo modelo de linguagem. Durante os experimentos, observou-se que um VLM poderia receber diretamente a imagem e responder a diferentes perguntas sobre a cena, reduzindo a quantidade de processamento intermediário necessário.
+
+A arquitetura atual concentra o processamento visual no VLM e utiliza Tool Calling para funcionalidades que exigem operações estruturadas, como o reconhecimento de pessoas. Essa abordagem mantém o sistema modular e permite substituir o modelo utilizado sem modificar significativamente as demais camadas da aplicação.
+
+Como trabalhos futuros, podem ser investigados recursos adicionais de acessibilidade e percepção visual, como identificação de obstáculos e situações de risco, OCR, estimativa espacial mais detalhada, processamento contínuo por vídeo e melhorias na interação por voz. Também pode ser avaliada a utilização de modelos locais mais eficientes e estratégias adicionais de fallback entre modelos.
+
+---
+
+## Tecnologias utilizadas
+
+- Python 3.12
+- FastAPI
+- Pydantic v2
+- SQLAlchemy 2.x
+- Alembic
+- PostgreSQL
+- Pillow
+- Ollama
+- Qwen
+- Gemini Flash-Lite
+- InsightFace
+- ONNX Runtime
+- Android
+- pytest
+- Ruff
+- mypy
+- uv
+- Docker
+
+---
+
+## Instalação e execução
+
+### Pré-requisitos
+
+- Python 3.12
+- uv
+- Docker e Docker Compose
+- Android Studio, caso o aplicativo Android seja executado localmente
+- Ollama, caso seja utilizado o modelo local
+
+### Backend
+
+Clone o repositório:
+
+```bash
+git clone https://github.com/caique-veiga/REVELIO-AI.git
+cd REVELIO-AI
+```
+
+Instale as dependências:
+
+```bash
+uv sync
+```
+
+Configure as variáveis de ambiente no arquivo `.env`.
+
+Exemplo das principais configurações:
+
+```env
+OLLAMA_ENABLED=true
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen
+GEMINI_API_KEY=
+FACE_MATCH_THRESHOLD=
+```
+
+Inicie o PostgreSQL:
+
+```bash
+docker compose up -d
+```
+
+Execute as migrações:
+
+```bash
+uv run alembic upgrade head
+```
+
+Inicie a API:
+
+```bash
+uv run uvicorn app.main:app --reload
+```
+
+A documentação interativa da API estará disponível em:
+
+```text
+http://localhost:8000/docs
+```
+
+### Testes
+
+Execute os testes automatizados:
 
 ```bash
 uv run pytest
-uv run ruff check .
-uv run mypy backend/app
 ```
 
-Os testes de repository rodam contra um SQLite em memória (não é necessário Postgres para
-`uv run pytest`); o Postgres real via Docker é usado apenas para rodar a aplicação e as migrations.
+Verifique o código com Ruff:
+
+```bash
+uv run ruff check .
+```
+
+Execute a verificação de tipos:
+
+```bash
+uv run mypy .
+```
+
+---
+
+## Escopo atual
+
+O protótipo atual concentra-se em:
+
+- captura de uma imagem;
+- interpretação multimodal da cena;
+- perguntas em linguagem natural;
+- manutenção de contexto dentro da conversa;
+- interação por voz no aplicativo Android;
+- resposta por síntese de voz;
+- execução local de VLM;
+- fallback para modelo multimodal por API;
+- reconhecimento facial por meio de ferramentas;
+- persistência de cenas e conversas.
+
+Funcionalidades como autenticação de usuários, feed, dashboard, RAG e arquitetura distribuída em múltiplos microsserviços não fazem parte do escopo atual do protótipo.
+
+---
+
+## Referências
+
+- Google. **Gemini API Documentation**. Documentação oficial da API Gemini.
+- Ollama. **Ollama Documentation**. Documentação oficial do projeto.
+- InsightFace. **InsightFace Documentation**. Biblioteca para análise e reconhecimento facial.
+- FastAPI. **FastAPI Documentation**. Framework para desenvolvimento de APIs em Python.
+- PostgreSQL. **PostgreSQL Documentation**. Sistema gerenciador de banco de dados utilizado no projeto.
+
+---
+
+## Repositório
+
+Código-fonte e documentação do projeto:
+
+https://github.com/caique-veiga/REVELIO-AI
